@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
+<title>AuthraGen Console — security control plane</title>
+<style>
+  :root { --bg:#0b0e14; --panel:#131826; --line:#232c44; --txt:#e6ebf5; --mut:#8b95ad;
+          --ok:#34d399; --warn:#fbbf24; --bad:#f87171; --acc:#7c9cff; }
+  * { box-sizing:border-box; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  body { margin:0; background:var(--bg); color:var(--txt); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; } header h1 span { color:var(--acc); }
+  header p { margin:0; color:var(--mut); font-size:11px; width:100%; }
+  .pill { font-size:11px; border:1px solid var(--line); border-radius:20px; padding:3px 10px; color:var(--mut); }
+  .pill b { color:var(--ok); }
+  nav { display:flex; gap:6px; padding:10px 20px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  nav button { width:auto; margin:0; padding:6px 12px; background:transparent; color:var(--mut); border:1px solid var(--line); }
+  nav button.on { color:#0b0e14; background:var(--acc); border-color:var(--acc); }
+  main { padding:14px 20px 40px; max-width:1200px; }
+  section.page { display:none; } section.page.on { display:block; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  h2 { font-size:12px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.08em; color:var(--mut); }
+  label { display:block; font-size:11px; color:var(--mut); margin:8px 0 3px; }
+  input,select,textarea,button { width:100%; background:#0d1220; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:12px; }
+  button { background:var(--acc); border-color:var(--acc); color:#0b0e14; font-weight:700; cursor:pointer; margin-top:10px; }
+  button.ghost { background:transparent; color:var(--acc); }
+  button.danger { background:var(--bad); border-color:var(--bad); }
+  pre { background:#0d1220; border:1px solid var(--line); border-radius:6px; padding:9px; font-size:11px; max-height:300px; overflow:auto; white-space:pre-wrap; word-break:break-word; }
+  .allow { color:var(--ok); font-weight:700; } .deny { color:var(--bad); font-weight:700; } .step_up { color:var(--warn); font-weight:700; }
+  .row { display:flex; gap:8px; } .row > * { flex:1; }
+  .warnbox { border:1px solid var(--warn); color:var(--warn); border-radius:6px; padding:8px; font-size:11px; margin:8px 0; }
+  table { width:100%; border-collapse:collapse; font-size:11px; } th,td { border-bottom:1px solid var(--line); padding:5px 6px; text-align:left; }
+  footer { padding:0 20px 24px; color:var(--mut); font-size:11px; } a { color:var(--acc); }
+</style>
+</head>
+<body>
+<header>
+  <h1>AuthraGen <span>Control Plane</span></h1>
+  <span class="pill">gateway <b id="hstat">…</b></span>
+  <span class="pill">audit <b id="astat">…</b></span>
+  <span class="pill">tenant <b id="tenant">—</b></span>
+  <p>Self-custody keys (in-memory only, never localStorage) · signed exact intents · single-use execution · signed approvals. Secrets are never persisted in the browser.</p>
+  <div class="warnbox" id="custodyWarn">Custody: self-custody enforced. Server-custodied keys are dev-only (AUTHRA_ALLOW_CUSTODY=1) and flagged everywhere.</div>
+</header>
+<nav id="nav" aria-label="sections"></nav>
+<main>
+  <section class="page" id="pg-overview"><h2>Overview</h2><div class="grid" id="ovGrid"></div><div class="card"><h2>Recent decisions</h2><pre id="ovRecent">—</pre></div></section>
+  <section class="page" id="pg-agents">
+    <h2>Agents — search / lifecycle</h2>
+    <div class="card"><div class="row"><div><label>Org</label><select id="agOrg"></select></div><div><label>Search (name/owner/team/env/model)</label><input id="agQ" placeholder="shopper"></div><div><label>Status</label><select id="agStatus"><option value="">any</option><option>active</option><option>suspended</option><option>quarantined</option><option>revoked</option><option>expired</option></select></div></div>
+    <div class="row"><button class="ghost" id="btnAgList">List agents</button><button class="ghost" id="btnAgIssue">Issue agent (CSR pubkey)</button></div>
+    <label>Agent name / owner / team / env</label><input id="agNew" placeholder="shopper | owner:alice team:payments env:prod">
+    <pre id="agOut">—</pre>
+    <div class="row"><button id="btnSuspend">Suspend</button><button id="btnQuar">Quarantine</button><button class="danger" id="btnRevoke">Revoke (confirm)</button></div>
+    <label>Target passport id</label><input id="agTarget" placeholder="agt_…"></div>
+  </section>
+  <section class="page" id="pg-blueprints">
+    <h2>Blueprints — reusable templates (versioned)</h2>
+    <div class="card"><label>Name</label><input id="bpName" value="payments-agent"><label>Description</label><input id="bpDesc" value="Handles payments under policy"><button id="btnBpCreate">Create blueprint</button><button class="ghost" id="btnBpList">List blueprints</button><pre id="bpOut">—</pre></div>
+  </section>
+  <section class="page" id="pg-policies">
+    <h2>Policies — visual editor + simulate + conflicts</h2>
+    <div class="card"><div class="row"><div><label>Effect</label><select id="polEffect"><option>allow</option><option>deny</option><option>require_approval</option></select></div><div><label>Priority</label><input id="polPri" value="10" type="number"></div></div>
+    <label>Actions (comma, explicit * for all; empty = match-nothing)</label><input id="polActions" value="data.read">
+    <label>Resources (comma)</label><input id="polRes" value="*">
+    <label>Condition JSON (max_spend_cents, max_depth, environments, min_approvals…)</label><input id="polCond" value='{"max_spend_cents":0}'>
+    <div class="row"><button id="btnPolCreate">Create policy</button><button class="ghost" id="btnPolList">List</button><button class="ghost" id="btnPolConf">Conflicts</button></div><pre id="polOut">—</pre>
+    <label>Simulate: action / resource / spend</label><div class="row"><input id="simA" value="payments.charge"><input id="simR" value="stripe:1"><input id="simS" value="100" type="number"></div><button class="ghost" id="btnSim">Simulate (dry-run, no credential)</button><pre id="simOut">—</pre></div>
+  </section>
+  <section class="page" id="pg-delegations"><h2>Delegations</h2><div class="card"><button class="ghost" id="btnDelList">List delegations</button><pre id="delOut">—</pre></div></section>
+  <section class="page" id="pg-approvals">
+    <h2>Approvals — exact request preview (never approve a changed request)</h2>
+    <div class="card"><button class="ghost" id="btnApList">List pending approvals</button><pre id="apOut">—</pre>
+    <label>Approval id</label><input id="apId" placeholder="apr_…"><label>Note (optional reason; identity comes from YOUR key)</label><input id="apNote" placeholder="verified invoice 42">
+    <div class="row"><button id="btnApYes">Approve (confirm)</button><button class="ghost" id="btnApNo">Deny</button></div></div>
+  </section>
+  <section class="page" id="pg-activity"><h2>Activity — ALLOW / STEP-UP / DENY / EXECUTED / REVOKED</h2><div class="card"><div class="row"><input id="actQ" placeholder="filter text"><button class="ghost" id="btnAct">Refresh</button></div><pre id="actOut">—</pre></div></section>
+  <section class="page" id="pg-audit"><h2>Audit — receipts + checkpoints + evidence</h2><div class="card"><div class="row"><button id="btnAudit">Receipts</button><button class="ghost" id="btnVerify">Verify chain</button><button class="ghost" id="btnCp">Checkpoint</button><button class="ghost" id="btnEv">Evidence bundle</button></div><pre id="auditOut">—</pre></div></section>
+  <section class="page" id="pg-keys">
+    <h2>Keys — rotation / revocation / KMS status (never shows private material)</h2>
+    <div class="card"><button class="ghost" id="btnKeys">List keys</button><pre id="keyOut">—</pre>
+    <label>Key id to rotate</label><input id="keyRot" placeholder="ak_…"><button id="btnRot">Rotate (new secret shown once)</button>
+    <label>Revoke: type + id (+kid for keys)</label><div class="row"><input id="revType" value="passport"><input id="revId" placeholder="agt_…"></div><button class="danger" id="btnRev2">Revoke (confirm)</button></div>
+  </section>
+  <section class="page" id="pg-settings">
+    <h2>Settings — access, org lock, thresholds</h2>
+    <div class="card">
+      <label>Bootstrap token (first run only; never stored)</label><input id="boot" placeholder="ar_boot_…" autocomplete="off">
+      <label>Org name</label><input id="orgName" value="acme">
+      <button id="btnOrg">Create org (admin secret shown ONCE)</button>
+      <label>Service key (admin/approver/executor/reporter) — memory only, never localStorage</label><input id="svc" placeholder="ak_…" autocomplete="off">
+      <div class="row"><button class="ghost" id="btnUse">Use key (memory)</button><button class="ghost" id="btnForget">Forget key</button></div>
+      <label>Use org</label><select id="orgSel"></select>
+      <div class="row"><button class="danger" id="btnLock">Emergency lock org (confirm)</button><button class="ghost" id="btnUnlock">Unlock</button></div>
+      <pre id="orgOut">—</pre>
+    </div>
+  </section>
+  <section class="page" id="pg-demo">
+    <h2>Demo — authorize + execute (exact intent)</h2>
+    <div class="card">
+      <label>Keypair (browser-held, in-memory)</label><div class="row"><input id="kpName" value="shopper-key"><button class="ghost" id="btnKey">Generate Ed25519</button></div>
+      <label>Keypairs</label><select id="kpSel"></select>
+      <label>Agent passport id</label><input id="aPid" placeholder="agt_…">
+      <div class="row"><div><label>Action</label><input id="fAction" value="payments.charge"></div><div><label>Resource</label><input id="fRes" value="stripe:invoice:42"></div></div>
+      <div class="row"><div><label>Amount (cents)</label><input id="fAmt" value="499" type="number"></div><div><label>Delegation token (opt)</label><input id="fTok" placeholder="tkn_…"></div></div>
+      <button id="btnAuth">Sign intent + Authorize (dry-run available)</button>
+      <pre id="authOut">—</pre>
+      <label>Approval credential</label><input id="apprCred" placeholder="paste approval_credential" autocomplete="off">
+      <div class="row"><button id="btnExec">Execute (match-check + consume)</button><button class="ghost" id="btnDry">Dry-run (no credential)</button></div>
+    </div>
+  </section>
+</main>
+<footer>Money path: signed intent → <code>/v1/authorize</code> → approval credential → <code>/v1/execute</code> (hash match + nonce consume + atomic debit). Audit is tamper-evident + checkpointed (not “immutable”). Offline verify needs a fresh revocation feed.</footer>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder();
+const KPS = {}; // name -> {pub, key} in-memory only
+let svc = '';   // in-memory only: NEVER localStorage/sessionStorage/DOM persistence
+let lastIntent = null, lastToken = null;
+const PAGES = [['overview','Overview'],['agents','Agents'],['blueprints','Blueprints'],['policies','Policies'],['delegations','Delegations'],['approvals','Approvals'],['activity','Activity'],['audit','Audit'],['keys','Keys'],['settings','Settings'],['demo','Demo']];
+function b64u(b){ let s=''; const u=new Uint8Array(b); for(let i=0;i<u.length;i++) s+=String.fromCharCode(u[i]); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function canon(o){ if(o===null||typeof o!=='object') return JSON.stringify(o);
+  if(Array.isArray(o)) return '['+o.map(canon).join(',')+']';
+  return '{'+Object.keys(o).filter(k=>k!=='signature').sort().map(k=>JSON.stringify(k)+':'+canon(o[k])).join(',')+'}'; }
+function setText(id, v){ $(id).textContent = v; }
+function showPage(name){ document.querySelectorAll('section.page').forEach(s=>s.classList.remove('on')); $('pg-'+name).classList.add('on'); document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on', b.dataset.p===name)); }
+function buildNav(){ const n=$('nav'); PAGES.forEach(([p,t])=>{ const b=document.createElement('button'); b.textContent=t; b.dataset.p=p; b.addEventListener('click',()=>showPage(p)); n.appendChild(b); }); }
+function opt(sel,v,t){ const o=document.createElement('option'); o.value=v; o.textContent=t||v; $(sel).appendChild(o); }
+async function api(path, method, body, extra){
+  method = method||'GET';
+  const h = {'content-type':'application/json'};
+  Object.assign(h, extra||{});
+  if (svc) h.authorization = 'Bearer ' + svc;
+  const r = await fetch(path, { method:method, headers:h, body: body?JSON.stringify(body):undefined });
+  const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = { raw: t.slice(0,500) }; }
+  j._status = r.status; return j;
+}
+function decisionLine(d){
+  // Safe rendering: textContent only, never innerHTML with server values.
+  const head = (d.decision||d.error||'error').toUpperCase() + ' risk=' + (d.risk===undefined?'':d.risk);
+  const lines = [head, 'reasons: ' + ((d.reasons||[d.message]).join(', ')).slice(0,400)];
+  if (d.policy_id) lines.push('policy: ' + d.policy_id + ' hash=' + String(d.policy_hash||'').slice(0,12) + ' v=' + (d.policy_version||''));
+  if (d.approval_id) lines.push('approval: ' + d.approval_id + ' (approve with approver key; identity = your key, not the note field)');
+  if (d.action_token) lines.push('action_token ready → press Execute (single-use, aud-bound)');
+  if (d.would) lines.push('would: ' + d.would + ' (dry-run: no credential created)');
+  if (d.request_id) lines.push('request: ' + d.request_id);
+  return lines.join('\n');
+}
+async function refresh(){
+  const h = await api('/v1/health'); setText('hstat', h.ok ? ('v'+h.v+' · '+(h.custody_policy||'')) : 'down');
+  setText('custodyWarn', 'Custody: ' + (h.custody_policy||'self-custody enforced') + '. Org roots are file-backed dev keys unless AUTHRA_KMS is set.');
+  const org = $('orgSel').value; $('tenant').textContent = org || '—';
+  if (org && svc) {
+    try {
+      const [ag, ap, au] = await Promise.all([api('/v1/passports?org_id='+encodeURIComponent(org)+'&limit=200'), api('/v1/approvals?org_id='+encodeURIComponent(org)+'&limit=50'), api('/v1/audit?org_id='+encodeURIComponent(org)+'&limit=20')]);
+      const list = (ag.passports||[]); const act = list.filter(x=>x.status==='active').length; const sus = list.filter(x=>x.status==='suspended').length; const qua = list.filter(x=>x.status==='quarantined').length;
+      const pend = (ap.approvals||[]).filter(x=>x.status==='pending'||x.status==='partial').length;
+      const g = $('ovGrid'); g.textContent='';
+      [['active agents',act],['suspended',sus],['quarantined',qua],['pending approvals',pend],['recent receipts',(au.receipts||[]).length]].forEach(pair=>{
+        const d = document.createElement('div'); d.className='card';
+        const h2 = document.createElement('h2'); h2.textContent = pair[0]; d.appendChild(h2);
+        const b = document.createElement('div'); b.textContent = String(pair[1]); b.style.fontSize='22px'; d.appendChild(b); g.appendChild(d);
+      });
+      setText('ovRecent', ((au.receipts||[]).slice(-8).map(x=>'#'+x.seq+' '+x.action+' → '+x.resource+' :: '+x.decision+' risk='+(x.risk===undefined?'':x.risk)).join('\n')) || '—');
+    } catch(e){ setText('ovRecent', 'needs reporter key'); }
+  }
+}
+async function createOrg(){
+  const r = await api('/v1/orgs','POST',{name:$('orgName').value},{'x-bootstrap-token':$('boot').value});
+  setText('orgOut', JSON.stringify({id:r.id, name:r.name, admin_key_id:r.admin_key_id, admin_secret: r.admin_secret ? '(shown once — copy now, never stored)' : undefined, org_pubkey: r.org_pubkey ? String(r.org_pubkey).slice(0,24)+'…' : undefined, error:r.error, message:r.message}, null, 1));
+  if (r.admin_secret) { svc = r.admin_secret; setText('orgOut', $('orgOut').textContent + '\n\nADMIN SECRET (copy now, in-memory only):\n' + r.admin_secret); }
+  if (r.id) { opt('orgSel', r.id, r.name); opt('agOrg', r.id, r.name); }
+  refresh();
+}
+async function genKey(){
+  try {
+    const kp = await crypto.subtle.generateKey({name:'Ed25519'}, true, ['sign','verify']);
+    const raw = await crypto.subtle.exportKey('raw', kp.publicKey);
+    const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+    const name = $('kpName').value || ('k'+Object.keys(KPS).length);
+    KPS[name] = { pub: b64u(raw), jwk: jwk, key: kp.privateKey };
+    opt('kpSel', name, name + ' · ' + KPS[name].pub.slice(0,16) + '…');
+    setText('authOut', 'pub(' + name + '):\n' + KPS[name].pub + '\n(private held in memory only — never sent, never stored)');
+  } catch(e){ setText('authOut', 'Ed25519 unsupported: ' + e.message); }
+}
+async function signIntentObj(intent, name){
+  const k = KPS[name || $('kpSel').value]; if(!k) throw new Error('pick a keypair');
+  const sig = await crypto.subtle.sign({name:'Ed25519'}, k.key, enc.encode(canon(intent)));
+  return { sig: b64u(sig), pub: k.pub };
+}
+function mkIntent(pid, action, resource, amt){
+  const now = Date.now();
+  const rnd = []; const rb = crypto.getRandomValues(new Uint8Array(16)); for (let i=0;i<rb.length;i++) rnd.push(rb[i].toString(16).padStart(2,'0'));
+  return { v:2, passport_id:pid, org_id:$('orgSel').value, action:action, resource:resource, params:{}, amount_cents:+amt||0, destination:'', tool:'console', nonce:rnd.join(''), iat:now, exp:now+60000, aud:'authragen' };
+}
+async function authorizeFlow(dry){
+  lastIntent = mkIntent($('aPid').value, $('fAction').value, $('fRes').value, $('fAmt').value);
+  const s = await signIntentObj(lastIntent);
+  const d = await api('/v1/authorize','POST',{intent:lastIntent,intent_sig:s.sig,token_id:$('fTok').value||null,dry_run:!!dry});
+  lastToken = d.action_token || null;
+  setText('authOut', decisionLine(d));
+  const m = /approval: (apr_[0-9a-f]+)/.exec($('authOut').textContent); if (m) $('apId').value = m[1];
+}
+async function executeFlow(){
+  const r = await api('/v1/execute','POST',{action_token:lastToken,intent:lastIntent,approval:$('apprCred').value||null});
+  setText('authOut', $('authOut').textContent + '\nexecute: ' + (r.ok?('OK receipt '+r.receipt.id):(r.error+': '+r.message)));
+  loadActivity();
+}
+function bind(){
+  buildNav(); showPage('overview');
+  $('btnOrg').addEventListener('click', createOrg);
+  $('btnUse').addEventListener('click', ()=>{ svc = $('svc').value.trim(); $('svc').value=''; setText('orgOut','key loaded in-memory only (never persisted). Press Forget to clear.'); refresh(); });
+  $('btnForget').addEventListener('click', ()=>{ svc=''; setText('orgOut','forgotten.'); refresh(); });
+  $('btnLock').addEventListener('click', async ()=>{ if(!confirm('Emergency LOCK this org? All authorize/execute fail closed until unlock.')) return; const r=await api('/v1/orgs/'+$('orgSel').value+'/lock','POST',{}); setText('orgOut', JSON.stringify(r,null,1)); });
+  $('btnUnlock').addEventListener('click', async ()=>{ const r=await api('/v1/orgs/'+$('orgSel').value+'/unlock','POST',{}); setText('orgOut', JSON.stringify(r,null,1)); });
+  $('btnKey').addEventListener('click', genKey);
+  $('btnAuth').addEventListener('click', ()=>authorizeFlow(false));
+  $('btnDry').addEventListener('click', ()=>authorizeFlow(true));
+  $('btnExec').addEventListener('click', executeFlow);
+  $('btnAgList').addEventListener('click', async ()=>{ const r=await api('/v1/passports?org_id='+encodeURIComponent($('orgSel').value)+'&q='+encodeURIComponent($('agQ').value||'')+( $('agStatus').value?('&status='+encodeURIComponent($('agStatus').value)):'')); setText('agOut', JSON.stringify({total:r.total, passports:(r.passports||[]).map(x=>({id:x.id,name:x.name,status:x.status,owner:x.owner,team:x.team,env:x.environment,model:x.model}))},null,1)); });
+  $('btnAgIssue').addEventListener('click', async ()=>{ const k=KPS[$('kpSel').value]; if(!k) return alert('generate a keypair first'); const parts=$('agNew').value.split('|').map(s=>s.trim()); const r=await api('/v1/passports','POST',{org_id:$('orgSel').value,name:parts[0]||'agent',kind:'agent',pubkey:k.pub}); setText('agOut', JSON.stringify(r,null,1).slice(0,1200)); if(r.id){$('aPid').value=r.id;$('agTarget').value=r.id;} });
+  const setStatus = st => async ()=>{ if(!confirm(st.toUpperCase()+' passport '+$('agTarget').value+'?')) return; const r=await api('/v1/passports/'+$('agTarget').value+'/status','POST',{status:st}); setText('agOut', JSON.stringify(r,null,1).slice(0,800)); };
+  $('btnSuspend').addEventListener('click', setStatus('suspended')); $('btnQuar').addEventListener('click', setStatus('quarantined'));
+  $('btnRevoke').addEventListener('click', async ()=>{ if(!confirm('REVOKE passport '+$('agTarget').value+'? Cascade: sub-agents + tokens fail closed.')) return; const r=await api('/v1/revoke','POST',{type:'passport',id:$('agTarget').value,reason:'console'}); setText('agOut', JSON.stringify(r,null,1)); });
+  $('btnBpCreate').addEventListener('click', async ()=>{ const r=await api('/v1/blueprints','POST',{org_id:$('orgSel').value,name:$('bpName').value,description:$('bpDesc').value}); setText('bpOut', JSON.stringify(r,null,1)); });
+  $('btnBpList').addEventListener('click', async ()=>{ const r=await api('/v1/blueprints?org_id='+encodeURIComponent($('orgSel').value)); setText('bpOut', JSON.stringify(r,null,1).slice(0,2000)); });
+  $('btnPolCreate').addEventListener('click', async ()=>{ let cond=null; try{cond=JSON.parse($('polCond').value||'null');}catch(e){return alert('bad condition JSON');} const r=await api('/v1/policies','POST',{org_id:$('orgSel').value,effect:$('polEffect').value,priority:+$('polPri').value,actions:$('polActions').value.split(',').map(s=>s.trim()).filter(Boolean),resources:$('polRes').value.split(',').map(s=>s.trim()).filter(Boolean),condition:cond}); setText('polOut', JSON.stringify(r,null,1)); });
+  $('btnPolList').addEventListener('click', async ()=>{ const r=await api('/v1/policies?org_id='+encodeURIComponent($('orgSel').value)); setText('polOut', JSON.stringify(r,null,1).slice(0,3000)); });
+  $('btnPolConf').addEventListener('click', async ()=>{ const r=await api('/v1/policies/conflicts?org_id='+encodeURIComponent($('orgSel').value)); setText('polOut', JSON.stringify(r,null,1)); });
+  $('btnSim').addEventListener('click', async ()=>{ const r=await api('/v1/policies/simulate','POST',{org_id:$('orgSel').value,action:$('simA').value,resource:$('simR').value,context:{spend_cents:+$('simS').value}}); setText('simOut', 'would: '+r.would+' provisional='+r.provisional+' policy='+(r.policy_id||'none')+' reasons='+(r.reasons||[]).join(',')); });
+  $('btnDelList').addEventListener('click', async ()=>{ const r=await api('/v1/delegations?org_id='+encodeURIComponent($('orgSel').value)); setText('delOut', JSON.stringify(r,null,1).slice(0,3000)); });
+  $('btnApList').addEventListener('click', async ()=>{ const r=await api('/v1/approvals?org_id='+encodeURIComponent($('orgSel').value)); const list=(r.approvals||[]).filter(a=>a.status==='pending'||a.status==='partial'); setText('apOut', list.map(a=>'['+a.status+' quorum '+(a.approvals||[]).length+'/'+(a.quorum||1)+'] '+a.id+' '+a.action+' '+a.resource+' amt='+(a.amount_cents||0)+' intent='+String(a.intent_hash).slice(0,12)+'…\n  exact params='+JSON.stringify(a.intent.params).slice(0,200)).join('\n')||'none pending'); });
+  $('btnApYes').addEventListener('click', async ()=>{ if(!confirm('Approve EXACT request '+$('apId').value+'? Approval binds to the stored intent hash; changed requests fail.')) return; const r=await api('/v1/approvals/'+$('apId').value,'POST',{approve:true,by:$('apNote').value||'console'}); setText('apOut', JSON.stringify({status:r.status, quorum:r.quorum, approvals:r.approvals, approval_credential: r.approval_credential?String(r.approval_credential).slice(0,32)+'…':null, action_token: r.action_token?String(r.action_token).slice(0,32)+'…':null},null,1)); if(r.approval_credential){$('apprCred').value=r.approval_credential; lastToken=r.action_token;} });
+  $('btnApNo').addEventListener('click', async ()=>{ const r=await api('/v1/approvals/'+$('apId').value,'POST',{approve:false,by:$('apNote').value||'console'}); setText('apOut', JSON.stringify(r,null,1).slice(0,800)); });
+  $('btnAct').addEventListener('click', loadActivity);
+  $('btnAudit').addEventListener('click', async ()=>{ const r=await api('/v1/audit?org_id='+encodeURIComponent($('orgSel').value)+'&limit=20'); setText('auditOut', (r.receipts||[]).map(x=>'#'+x.seq+' '+x.action+' → '+x.resource+' :: '+x.decision+' risk='+(x.risk===undefined?'':x.risk)+' pol='+(x.policy_id||'-')+' req='+(x.request_id||'')).join('\n')||JSON.stringify(r).slice(0,800)); });
+  $('btnVerify').addEventListener('click', async ()=>{ const r=await api('/v1/audit/verify?org_id='+encodeURIComponent($('orgSel').value)); setText('auditOut', JSON.stringify(r,null,1)); $('astat').textContent = r.ok?('ok ('+r.count+')'):'BROKEN'; });
+  $('btnCp').addEventListener('click', async ()=>{ const r=await api('/v1/audit/checkpoint','POST',{}); setText('auditOut', JSON.stringify(r,null,1)); });
+  $('btnEv').addEventListener('click', async ()=>{ const r=await api('/v1/audit/evidence','POST',{org_id:$('orgSel').value}); setText('auditOut', 'bundle '+r.bundle_hash+' count='+r.count+' sig='+(r.signature?'yes':'no')); });
+  $('btnKeys').addEventListener('click', async ()=>{ const r=await api('/v1/orgs/'+$('orgSel').value+'/keys'); setText('keyOut', JSON.stringify(r,null,1).slice(0,2000)); });
+  $('btnRot').addEventListener('click', async ()=>{ const r=await api('/v1/orgs/'+$('orgSel').value+'/keys/rotate','POST',{key_id:$('keyRot').value}); setText('keyOut', 'NEW SECRET (copy once, in-memory only):\n'+(r.secret||JSON.stringify(r))); });
+  $('btnRev2').addEventListener('click', async ()=>{ if(!confirm('Revoke '+$('revType').value+':'+$('revId').value+'?')) return; const r=await api('/v1/revoke','POST',{type:$('revType').value,id:$('revId').value}); setText('keyOut', JSON.stringify(r,null,1)); });
+}
+async function loadActivity(){
+  const q = $('actQ').value||'';
+  const r = await api('/v1/audit?org_id='+encodeURIComponent($('orgSel').value)+'&limit=50');
+  const rows = (r.receipts||[]).filter(x=>!q || (x.action+' '+x.resource+' '+x.decision+' '+(x.request_id||'')).includes(q));
+  setText('actOut', rows.map(x=>x.decision.toUpperCase().padEnd(9)+' '+x.action+' '+x.resource+' req='+(x.request_id||'')).join('\n')||'—');
+}
+bind(); refresh();
+</script>
+</body>
+</html>

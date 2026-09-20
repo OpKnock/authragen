@@ -1,0 +1,52 @@
+{
+  "name": "authragen",
+  "version": "2.1.0",
+  "description": "AuthraGen — vendor-neutral Agent Passport trust layer (exact-authority identity for agents)",
+  "license": "Apache-2.0",
+  "main": "sdk-js/authragen.js",
+  "files": [
+    "src/",
+    "sdk-js/",
+    "adapters/",
+    "examples/",
+    "test/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node src/server.js",
+    "start:prod": "NODE_ENV=production node src/server.js",
+    "dev": "node --watch src/server.js",
+    "demo": "node examples/demo.js",
+    "demo:python": "python examples/python_demo.py",
+    "test": "node test/run.js",
+    "test:ci": "AUTHRA_DATA=$(mktemp -d) node test/run.js",
+    "lint": "eslint src/ sdk-js/ adapters/ examples/ test/",
+    "lint:fix": "eslint src/ sdk-js/ adapters/ examples/ test/ --fix",
+    "typecheck": "node --check src/server.js && node --check src/tokens.js && node --check src/intent.js && node --check src/policy.js && node --check src/auth.js && node --check src/audit.js && node --check src/store.js && node --check src/signer.js && node --check src/nonce.js && node --check src/crypto.js && node --check src/risk.js && node --check sdk-js/authragen.js",
+    "security:audit": "npm audit --audit-level=high",
+    "security:deps": "npx depcheck",
+    "bench": "node test/bench.js",
+    "docs:dev": "npx vitepress dev docs",
+    "docs:build": "npx vitepress build docs",
+    "prepare": "husky install"
+  },
+  "engines": { "node": ">=18" },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "husky": "^9.0.0",
+    "vitepress": "^1.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authragen/authragen.git"
+  },
+  "bugs": {
+    "url": "https://github.com/authragen/authragen/issues"
+  },
+  "homepage": "https://authragen.dev"
+}
