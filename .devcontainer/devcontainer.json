@@ -1,0 +1,43 @@
+{
+  "name": "AuthraGen",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "redhat.vscode-yaml",
+        "github.vscode-pull-request-github",
+        "github.vscode-github-actions"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit",
+          "source.organizeImports": "explicit"
+        },
+        "eslint.enable": true,
+        "python.linting.enabled": true,
+        "python.linting.ruffEnabled": true,
+        "python.formatting.provider": "none"
+      }
+    }
+  },
+  "forwardPorts": [8787, 9229],
+  "postCreateCommand": "npm ci && pip install -q pytest httpx",
+  "remoteUser": "node",
+  "containerEnv": {
+    "NODE_ENV": "development",
+    "AUTHRA_DATA": "/workspaces/authragen/data",
+    "AUTHRA_CORS": "*"
+  }
+}

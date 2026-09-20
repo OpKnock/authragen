@@ -1,0 +1,43 @@
+# Git attributes for AuthraGen
+
+# Line endings
+* text=auto eol=lf
+
+# Explicitly declare text files
+*.js text eol=lf
+*.ts text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.txt text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Diff settings
+*.md diff=markdown
+*.py diff=python
+*.js diff=javascript
+*.ts diff=typescript
+
+# Linguist overrides
+docs/** linguist-vendored
+test/** linguist-test
+examples/** linguist-test
+.github/** linguist-vendored

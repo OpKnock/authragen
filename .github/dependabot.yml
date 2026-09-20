@@ -1,0 +1,51 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore(deps): "
+    groups:
+      dev-deps:
+        patterns:
+          - "eslint*"
+          - "husky*"
+          - "vitepress*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "noble-ed25519"
+        update-types: ["version-update:semver-major"]
+  
+  - package-ecosystem: "pip"
+    directory: "/sdk_python"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore(deps-python): "
+  
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(deps-github): "

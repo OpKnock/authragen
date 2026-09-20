@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  authragen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: authragen
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      - NODE_ENV=production
+      - PORT=8787
+      - AUTHRA_DATA=/app/data
+      - AUTHRA_CORS=*
+      - AUTHRA_TRUST_PROXY=1
+      - AUTHRA_BODY_LIMIT=256kb
+      - AUTHRA_SESSION_TTL_MS=43200000
+      - AUTHRA_INTENT_TTL_S=120
+      - AUTHRA_ACTION_TTL_S=300
+      - AUTHRA_APPROVAL_TTL_S=3600
+      - AUTHRA_CLOCK_SKEW_S=30
+      - AUTHRA_RATE_LIMIT_WINDOW_MS=60000
+      - AUTHRA_RATE_LIMIT_MAX=100
+      - AUTHRA_RISK_CEILING=80
+    volumes:
+      - authragen_data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8787/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Development override - use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+  # authragen-dev:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: builder
+  #   container_name: authragen-dev
+  #   ports:
+  #     - "8787:8787"
+  #     - "9229:9229"
+  #   environment:
+  #     - NODE_ENV=development
+  #     - PORT=8787
+  #     - AUTHRA_DATA=/app/data
+  #     - AUTHRA_CORS=*
+  #   volumes:
+  #     - .:/app
+  #     - authragen_data:/app/data
+  #   command: node --inspect=0.0.0.0:9229 --watch src/server.js
+
+volumes:
+  authragen_data:
+    driver: local

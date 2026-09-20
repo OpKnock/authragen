@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  authragen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: authragen-dev
+    ports:
+      - "8787:8787"
+      - "9229:9229"
+    environment:
+      - NODE_ENV=development
+      - PORT=8787
+      - AUTHRA_DATA=/app/data
+      - AUTHRA_CORS=*
+      - AUTHRA_TRUST_PROXY=1
+      - AUTHRA_BODY_LIMIT=256kb
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - authragen_data:/app/data
+    command: node --inspect=0.0.0.0:9229 --watch src/server.js
+
+volumes:
+  authragen_data:
+    driver: local

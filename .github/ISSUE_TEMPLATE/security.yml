@@ -1,0 +1,67 @@
+name: Security Issue
+description: Report a security vulnerability (use GitHub Security Advisory for sensitive issues)
+title: "[Security]: "
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **⚠️ For sensitive security issues, please use [GitHub Security Advisories](https://github.com/OpKnock/authragen/security/advisories/new) instead of this form.**
+
+        This form is for non-sensitive security discussions, questions, or already-public issues.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity (CVSS if known)
+      options:
+        - Critical (9.0-10.0)
+        - High (7.0-8.9)
+        - Medium (4.0-6.9)
+        - Low (0.1-3.9)
+        - Informational
+      default: 2
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Clear description of the security issue
+      placeholder: |
+        The authorization endpoint allows...
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: What can an attacker achieve?
+      placeholder: |
+        An attacker could bypass authorization and...
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      description: Steps to reproduce (if safe to share)
+      placeholder: |
+        1. ...
+
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Suggested Mitigation
+      description: How should this be fixed?
+      placeholder: |
+        Add validation for...
+
+  - type: checkboxes
+    id: disclosure
+    attributes:
+      label: Disclosure
+      options:
+        - label: This issue is already public
+          required: false
+        - label: I have reported this via Security Advisory for sensitive details
+          required: true

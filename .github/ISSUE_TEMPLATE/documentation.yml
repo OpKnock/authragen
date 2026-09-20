@@ -1,0 +1,59 @@
+name: Documentation
+description: Report documentation issues or request improvements
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us improve the docs!
+
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation Type
+      options:
+        - README.md
+        - PROTOCOL.md
+        - COMPARISON.md
+        - CHANGELOG.md
+        - API Reference (OpenAPI)
+        - SDK Documentation (JS/Python)
+        - Adapter Documentation
+        - Deployment Guides
+        - Architecture/Design Docs
+        - Other
+      default: 0
+
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      description: File, section, or URL
+      placeholder: "README.md > Quickstart > line 45"
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: Issue Description
+      description: What's wrong or missing?
+      placeholder: |
+        The quickstart example fails because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Fix
+      description: How should it be improved?
+      placeholder: |
+        Update the example to...
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I've checked the latest version
+          required: true
