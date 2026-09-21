@@ -1,105 +1,55 @@
 #!/usr/bin/env node
 'use strict';
 
-const fs = require('node:fs');
-const path = require('node:path');
-
-const serverPath = path.join(__dirname, '..', 'src', 'server.js');
-const serverCode = fs.readFileSync(serverPath, 'utf8');
-
-const routes = [];
-const routeRegex = /app\.(get|post|put|delete|patch)\(['"]([^'"]+)['"](?:,|$)/g;
-let match;
-
-while ((match = routeRegex.exec(serverCode)) !== null) {
-  const method = match[1].toUpperCase();
-  const path_ = match[2];
-  routes.push({ method, path: path_ });
-}
+const ROUTES = [
+  ['GET','/'], ['GET','/console'], ['GET','/v1/health'], ['HEAD','/v1/health'], ['GET','/health'],
+  ['GET','/metrics'],
+  ['GET','/v1/orgs/:id/pubkey'],
+  ['POST','/v1/orgs'], ['GET','/v1/orgs'], ['GET','/v1/orgs/:id'],
+  ['POST','/v1/orgs/:id/lock'], ['POST','/v1/orgs/:id/unlock'], ['PUT','/v1/orgs/:id/risk'],
+  ['POST','/v1/orgs/:id/keys'], ['GET','/v1/orgs/:id/keys'], ['POST','/v1/orgs/:id/keys/rotate'],
+  ['POST','/v1/blueprints'], ['GET','/v1/blueprints'], ['GET','/v1/blueprints/:id'],
+  ['POST','/v1/passports'], ['GET','/v1/passports'], ['POST','/v1/passports/rotate'],
+  ['POST','/v1/passports/:id/status'], ['POST','/v1/passports/:id/keys/revoke'], ['GET','/v1/passports/:id'],
+  ['POST','/v1/delegate'], ['GET','/v1/delegations'],
+  ['POST','/v1/policies'], ['GET','/v1/policies'], ['POST','/v1/policies/simulate'], ['GET','/v1/policies/conflicts'], ['PUT','/v1/policies/:id'],
+  ['POST','/v1/authorize'], ['POST','/v1/execute'],
+  ['POST','/v1/approvals/:id'], ['GET','/v1/approvals'],
+  ['POST','/v1/revoke'], ['GET','/v1/revoked'],
+  ['POST','/v1/verify'], ['GET','/v1/verify'],
+  ['GET','/v1/audit'], ['GET','/v1/audit/export'], ['POST','/v1/audit/evidence'],
+  ['GET','/v1/audit/verify'], ['POST','/v1/audit/checkpoint'], ['GET','/v1/audit/checkpoints'],
+];
 
 const openapi = {
   openapi: '3.0.3',
   info: {
     title: 'AuthraGen API',
-    version: '2.1.0',
-    description: 'Vendor-neutral Agent Passport trust layer — exact-authority identity for agents',
+    version: '2.2.1',
+    description: 'Vendor-neutral agent identity and exact-intent authorization trust layer.',
     license: { name: 'Apache-2.0', url: 'https://www.apache.org/licenses/LICENSE-2.0.html' },
     contact: { url: 'https://github.com/OpKnock/authragen' }
   },
-  servers: [
-    { url: 'http://localhost:8787/v1', description: 'Local development' },
-    { url: 'https://api.authragen.dev/v1', description: 'Production' }
-  ],
+  servers: [{ url: 'http://localhost:8787', description: 'Local development' }],
   security: [{ BearerAuth: [] }],
   components: {
     securitySchemes: {
-      BearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      BearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'AuthraGen API key or credential' },
       BootstrapToken: { type: 'apiKey', in: 'header', name: 'x-bootstrap-token' }
     },
     schemas: {
       Error: {
         type: 'object',
+        required: ['error','message','request_id'],
         properties: {
           error: { type: 'string' },
           message: { type: 'string' },
           request_id: { type: 'string' }
-        },
-        required: ['error', 'message', 'request_id']
-      },
-      Organization: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', pattern: '^org_' },
-          name: { type: 'string' },
-          org_pubkey: { type: 'string' },
-          admin_key_id: { type: 'string' },
-          admin_secret: { type: 'string' },
-          risk_stepup: { type: 'integer' },
-          risk_ceiling: { type: 'integer' },
-          locked: { type: 'boolean' },
-          created_at: { type: 'string', format: 'date-time' }
-        }
-      },
-      Passport: {
-        type: 'object',
-        properties: {
-          v: { type: 'integer', enum: [2] },
-          id: { type: 'string', pattern: '^agt_' },
-          did: { type: 'string', pattern: '^did:authragen:' },
-          org_id: { type: 'string' },
-          parent_id: { type: 'string', nullable: true },
-          kind: { type: 'string', enum: ['agent', 'subagent'] },
-          name: { type: 'string' },
-          custody: { type: 'string', enum: ['self', 'server'] },
-          blueprint_id: { type: 'string', nullable: true },
-          owner: { type: 'string' },
-          sponsor: { type: 'string' },
-          team: { type: 'string' },
-          environment: { type: 'string', enum: ['development', 'staging', 'production'] },
-          purpose: { type: 'string' },
-          model: { type: 'string' },
-          provider: { type: 'string' },
-          runtime: { type: 'string' },
-          framework: { type: 'string' },
-          created_at: { type: 'string', format: 'date-time' },
-          last_seen: { type: 'string', format: 'date-time' },
-          keys: {
-            type: 'object',
-            properties: {
-              current: { type: 'object' },
-              history: { type: 'array', items: { type: 'object' } }
-            }
-          },
-          grace_period_s: { type: 'integer' },
-          status: { type: 'string', enum: ['draft', 'pending_approval', 'active', 'suspended', 'quarantined', 'rotating', 'expired', 'revoked'] },
-          iat: { type: 'string', format: 'date-time' },
-          exp: { type: 'string', format: 'date-time' },
-          signature: { type: 'string' }
         }
       },
       Intent: {
         type: 'object',
-        required: ['passport_id', 'org_id', 'action', 'resource', 'amount_cents', 'destination', 'tool', 'aud'],
+        required: ['v','passport_id','org_id','action','resource','amount_cents','nonce','iat','exp','aud'],
         properties: {
           v: { type: 'integer', enum: [2] },
           passport_id: { type: 'string' },
@@ -111,54 +61,24 @@ const openapi = {
           destination: { type: 'string' },
           tool: { type: 'string' },
           nonce: { type: 'string', minLength: 16 },
-          iat: { type: 'string', format: 'date-time' },
-          exp: { type: 'string', format: 'date-time' },
+          iat: { type: 'integer' },
+          exp: { type: 'integer' },
           aud: { type: 'string' }
         }
       },
       Decision: {
         type: 'object',
         properties: {
-          decision: { type: 'string', enum: ['allow', 'step_up', 'deny', 'dry_run'] },
+          decision: { type: 'string', enum: ['allow','step_up','deny','dry_run'] },
           action_token: { type: 'string', nullable: true },
           action_jti: { type: 'string', nullable: true },
           approval_id: { type: 'string', nullable: true },
-          would: { type: 'string', enum: ['ALLOW', 'STEP-UP', 'DENY'], nullable: true },
-          risk: { type: 'object' },
+          would: { type: 'string', nullable: true },
+          risk: { type: 'object', nullable: true },
           request_id: { type: 'string' },
-          policy_id: { type: 'string' },
-          policy_hash: { type: 'string' },
-          policy_version: { type: 'integer' },
-          reason: { type: 'string', nullable: true }
-        }
-      },
-      Receipt: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', pattern: '^rcpt_' },
-          type: { type: 'string', enum: ['authorized', 'executed', 'denied', 'replay'] },
-          request_id: { type: 'string' },
-          intent_hash: { type: 'string' },
-          action_jti: { type: 'string' },
-          approval_jti: { type: 'string' },
-          executor: { type: 'object' },
-          policy_id: { type: 'string' },
-          policy_hash: { type: 'string' },
-          policy_version: { type: 'integer' },
-          risk: { type: 'object' },
-          timestamp: { type: 'string', format: 'date-time' },
-          prev_receipt_hash: { type: 'string' }
-        }
-      },
-      RevocationEntry: {
-        type: 'object',
-        properties: {
-          seq: { type: 'integer' },
-          type: { type: 'string', enum: ['org', 'blueprint', 'passport', 'key', 'token', 'action', 'apikey'] },
-          id: { type: 'string' },
-          reason: { type: 'string' },
-          timestamp: { type: 'string', format: 'date-time' },
-          cascade: { type: 'array', items: { type: 'string' } }
+          policy_id: { type: 'string', nullable: true },
+          policy_hash: { type: 'string', nullable: true },
+          policy_version: { type: 'integer', nullable: true }
         }
       }
     }
@@ -166,22 +86,27 @@ const openapi = {
   paths: {}
 };
 
-for (const route of routes) {
-  const pathKey = route.path.replace(/:([^/]+)/g, '{$1}');
-  if (!openapi.paths[pathKey]) openapi.paths[pathKey] = {};
-  
-  openapi.paths[pathKey][route.method.toLowerCase()] = {
-    summary: `${route.method} ${route.path}`,
+for (const [method, rawPath] of ROUTES) {
+  const pathKey = rawPath.replace(/:([^/]+)/g, '{$1}');
+  const security = rawPath === '/v1/orgs' && method === 'POST' ? [{ BootstrapToken: [] }] : [{ BearerAuth: [] }];
+  openapi.paths[pathKey] ||= {};
+  openapi.paths[pathKey][method.toLowerCase()] = {
+    summary: method + ' ' + rawPath,
+    security,
     responses: {
       '200': { description: 'Success' },
+      '201': { description: 'Created' },
+      '202': { description: 'Accepted / step-up required' },
+      '204': { description: 'No Content' },
       '400': { description: 'Bad Request', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
       '401': { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
-      '403': { description: 'Forbidden', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+      '403': { description: 'Forbidden / policy denied', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
       '404': { description: 'Not Found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
-      '429': { description: 'Rate Limited', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
-    },
-    security: route.path === '/orgs' && route.method === 'POST' ? [{ BootstrapToken: [] }] : [{ BearerAuth: [] }]
+      '409': { description: 'Conflict / replay', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+      '429': { description: 'Rate Limited', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+      '500': { description: 'Storage/Internal Error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+    }
   };
 }
 
-console.log(JSON.stringify(openapi, null, 2));
+process.stdout.write(JSON.stringify(openapi, null, 2) + '\n');
