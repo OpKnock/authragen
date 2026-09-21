@@ -70,6 +70,7 @@ function verifyJwt(token, jwks, { issuer, audience, nonce = null, clockSkewSec =
   if (typeof payload.iss !== 'string' || payload.iss !== issuer) throw new Error('OIDC issuer mismatch');
   if (typeof payload.sub !== 'string' || !payload.sub || payload.sub.length > 255) throw new Error('OIDC subject invalid');
   const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  if (!aud.length || aud.some(x => typeof x !== 'string')) throw new Error('OIDC audience invalid');
   if (!aud.includes(audience)) throw new Error('OIDC audience mismatch');
   if (aud.length > 1 && payload.azp !== audience) throw new Error('OIDC azp mismatch');
   if (!Number.isInteger(payload.exp) || now > payload.exp + clockSkewSec) throw new Error('OIDC token expired');
@@ -90,7 +91,7 @@ class OidcVerifier {
     this.staticOrgId = staticOrgId;
     this.roleMap = roleMap;
     this.defaultRole = defaultRole;
-    this.clockSkewSec = clockSkewSec;
+    this.clockSkewSec = Number.isSafeInteger(Number(clockSkewSec)) && Number(clockSkewSec) >= 0 && Number(clockSkewSec) <= 300 ? Number(clockSkewSec) : 30;
     this.discovery = discovery;
     this.jwks = jwks;
   }
@@ -99,6 +100,9 @@ class OidcVerifier {
     this.discovery = this.discovery || await fetchJson(discoveryUrl);
     if (this.discovery.issuer !== this.issuer) throw new Error('OIDC discovery issuer mismatch');
     if (!this.discovery.jwks_uri) throw new Error('OIDC discovery missing jwks_uri');
+    if (this.discovery.id_token_signing_alg_values_supported && !this.discovery.id_token_signing_alg_values_supported.some(a => ['RS256','PS256','ES256','EdDSA'].includes(a))) {
+      throw new Error('OIDC provider does not advertise a supported ID-token signing algorithm');
+    }
     assertHttps(this.discovery.jwks_uri, 'OIDC jwks_uri');
     this.jwks = await fetchJson(this.discovery.jwks_uri);
     if (!Array.isArray(this.jwks.keys)) throw new Error('OIDC JWKS invalid');
