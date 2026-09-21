@@ -97,14 +97,18 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Start Vault
+        env:
+          VAULT_TOKEN: authragen-ci-root
         run: |
-          docker run -d --name authragen-vault -p 8200:8200 -e VAULT_DEV_ROOT_TOKEN_ID=authragen-ci-root -e VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200 hashicorp/vault:2.1.1 server -dev
-          for i in $(seq 1 30); do curl -fsS -H 'X-Vault-Token: authragen-ci-root' http://127.0.0.1:8200/v1/sys/health && break; sleep 1; done
+          docker run -d --name authragen-vault -p 8200:8200 -e VAULT_DEV_ROOT_TOKEN_ID="$VAULT_TOKEN" -e VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200 hashicorp/vault:2.1.1 server -dev
+          for i in $(seq 1 30); do curl -fsS -H "X-Vault-Token: $VAULT_TOKEN" http://127.0.0.1:8200/v1/sys/health && break; sleep 1; done
       - name: Configure Transit keys
+        env:
+          VAULT_TOKEN: authragen-ci-root
         run: |
-          curl -fsS -X POST -H 'X-Vault-Token: authragen-ci-root' -H 'Content-Type: application/json' --data '{"type":"transit"}' http://127.0.0.1:8200/v1/sys/mounts/transit || true
-          curl -fsS -X POST -H 'X-Vault-Token: authragen-ci-root' -H 'Content-Type: application/json' --data '{"type":"ecdsa-p256"}' http://127.0.0.1:8200/v1/transit/keys/authragen-org
-          curl -fsS -X POST -H 'X-Vault-Token: authragen-ci-root' -H 'Content-Type: application/json' --data '{"type":"ecdsa-p256"}' http://127.0.0.1:8200/v1/transit/keys/authragen-checkpoint
+          curl -fsS -X POST -H "X-Vault-Token: $VAULT_TOKEN" -H 'Content-Type: application/json' --data '{"type":"transit"}' http://127.0.0.1:8200/v1/sys/mounts/transit || true
+          curl -fsS -X POST -H "X-Vault-Token: $VAULT_TOKEN" -H 'Content-Type: application/json' --data '{"type":"ecdsa-p256"}' http://127.0.0.1:8200/v1/transit/keys/authragen-org
+          curl -fsS -X POST -H "X-Vault-Token: $VAULT_TOKEN" -H 'Content-Type: application/json' --data '{"type":"ecdsa-p256"}' http://127.0.0.1:8200/v1/transit/keys/authragen-checkpoint
       - name: Verify Vault signer
         env:
           AUTHRA_KMS: vault
