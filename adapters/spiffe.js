@@ -57,6 +57,8 @@ function verifyJwtSignature(token, jwks, now = Math.floor(Date.now()/1000)) {
   } else ok = crypto.verify(null, signing, key, sig);
   if (!ok) throw new Error('SPIFFE JWT-SVID signature invalid');
   if (typeof claims.sub !== 'string' || !claims.sub.startsWith('spiffe://')) throw new Error('SPIFFE JWT-SVID subject is not a SPIFFE ID');
+  const trustDomain = new URL(claims.sub).host;
+  if (claims.iss !== trustDomain && claims.iss !== 'spiffe://' + trustDomain) throw new Error('SPIFFE JWT-SVID issuer must match its trust domain');
   if (claims.exp != null && now > claims.exp) throw new Error('SPIFFE JWT-SVID expired');
   if (claims.nbf != null && now < claims.nbf) throw new Error('SPIFFE JWT-SVID not yet valid');
   if (!claims.iat || !Number.isInteger(claims.iat)) throw new Error('SPIFFE JWT-SVID missing iat');
