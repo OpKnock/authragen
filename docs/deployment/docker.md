@@ -19,6 +19,8 @@ docker run -d \
   -e AUTHRA_CORS="https://yourdomain.com" \
   -e AUTHRA_TRUST_PROXY=1 \
   -e AUTHRA_KMS=aws \
+  -e AUTHRA_STORE=postgres \
+  -e DATABASE_URL='postgres://user:password@db.example/authragen' \
   -e AUTHRA_ANCHOR_URL=https://rekor.example.com/api/v1/log/entries \
   authragen:latest
 
