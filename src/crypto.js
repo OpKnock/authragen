@@ -59,11 +59,12 @@ function hasDuplicateKeys(raw) {
     // Fallback: use a strict duplicate check by parsing with explicit key tracking.
     let pos = 0;
     function skipWs() { while (pos < s.length && /\s/.test(s[pos])) pos++; }
-    function parseVal() {
+    function parseVal(depth = 0) {
+      if (depth > 100) throw new Error('too deep');
       skipWs();
       const c = s[pos];
-      if (c === '{') return parseObj();
-      if (c === '[') { pos++; skipWs(); if (s[pos] === ']') { pos++; return 0; } while (true) { parseVal(); skipWs(); if (s[pos] === ',') { pos++; continue; } if (s[pos] === ']') { pos++; break; } throw new Error('bad'); } return 0; }
+      if (c === '{') return parseObj(depth + 1);
+      if (c === '[') { pos++; skipWs(); if (s[pos] === ']') { pos++; return 0; } while (true) { parseVal(depth + 1); skipWs(); if (s[pos] === ',') { pos++; continue; } if (s[pos] === ']') { pos++; break; } throw new Error('bad'); } return 0; }
       if (c === '"') { parseStr(); return 0; }
       // number/literal: consume
       while (pos < s.length && ![',', '}', ']', ' ', '\n', '\r', '\t'].includes(s[pos])) pos++;
@@ -87,7 +88,8 @@ function hasDuplicateKeys(raw) {
       }
       throw new Error('bad string');
     }
-    function parseObj() {
+    function parseObj(depth = 0) {
+      if (depth > 100) throw new Error('too deep');
       pos++; // {
       skipWs();
       const keys = new Set();
@@ -101,7 +103,7 @@ function hasDuplicateKeys(raw) {
         skipWs();
         if (s[pos] !== ':') throw new Error('expected colon');
         pos++;
-        parseVal();
+        parseVal(depth + 1);
         skipWs();
         if (s[pos] === ',') { pos++; continue; }
         if (s[pos] === '}') { pos++; break; }
