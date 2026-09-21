@@ -122,16 +122,23 @@ class RedisStore {
     let current = Number(currentRaw || 0);
     if (!Number.isSafeInteger(current) || current < 0) current = 0;
     if (current === 0 && currentRaw == null) {
-      const existing = await this.all('revocations');
-      const max = existing.reduce((m, r) => {
-        const n = Number(r.seq);
-        return Number.isSafeInteger(n) && n > m ? n : m;
-      }, 0);
-      if (max > current) {
-        await this.redis.set('revocation:seq', String(max));
-      } else {
-        await this.redis.set('revocation:seq', '0', 'NX');
-      }
+      let max = 0;
+      let cursor = '0';
+      do {
+        const [next, keys] = await this.redis.scan(cursor, 'MATCH', 'revocations:*', 'COUNT', 500);
+        cursor = next;
+        if (keys.length) {
+          const rows = await this.redis.mget(keys);
+          for (const raw of rows.filter(Boolean)) {
+            try {
+              const n = Number(JSON.parse(raw).seq);
+              if (Number.isSafeInteger(n) && n > max) max = n;
+            } catch {}
+          }
+        }
+      } while (cursor !== '0');
+      if (max > current) await this.redis.set('revocation:seq', String(max));
+      else await this.redis.set('revocation:seq', '0', 'NX');
     }
   }
 
