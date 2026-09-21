@@ -53,6 +53,7 @@ jobs:
       - run: npm test
         env:
           AUTHRA_DATA: ${{ runner.temp }}/authragen-test
+      - run: npm run test:audit
 
   test-python:
     name: Tests (Python ${{ matrix.python }})
