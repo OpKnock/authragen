@@ -224,8 +224,8 @@ async function waitHealth(base, tries = 60) {
     const ip = I(a.id, 'payments.charge', 'stripe:1', { amount_cents: 100 });
     const dp = await me.authorize(ip, S(ip, aK));
     ok(dp.decision === 'step_up' && dp.approval_id, 'payments step up');
-    const apk = (await admin.mintKey(org_id, 'approver', 't')).secret;
-    const approver = new AuthraGen({ baseUrl: BASE, key: apk });
+    const apk = await admin.mintKey(org_id, 'approver', 't');
+    const approver = new AuthraGen({ baseUrl: BASE, key: apk.credential || `${apk.key_id}.${apk.secret}` });
     // approval identity comes from the KEY, not the free-form by field
     const ap = await approver.approve(dp.approval_id, true, 'claimed-evil-identity');
     ok(ap.status === 'approved' && !!ap.approval_credential && !!ap.action_token, 'approval mints bound credential + token');
