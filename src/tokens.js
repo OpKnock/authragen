@@ -242,6 +242,16 @@ function normalizeNotAfter(v) {
   if(!Number.isFinite(n))throw code('bad_request','constraints.not_after must be a timestamp or ISO date');
   return n;
 }
+function strictStringArray(value, name, { required = false, max = 256 } = {}) {
+  if (value == null) {
+    if (required) throw code('bad_request', name + ' must be a non-empty string array');
+    return null;
+  }
+  if (!Array.isArray(value) || value.length > max || value.some(x => typeof x !== 'string' || !x.trim() || x.length > 512)) {
+    throw code('bad_request', name + ' must contain only non-empty strings (max 512 chars each)');
+  }
+  return value.map(x => x.normalize('NFC'));
+}
 function registerDelegation({ org_id, delegator_id, payload, envelope, callerIsAdmin = false }) {
   if(!org_id||!delegator_id||!payload||!envelope)throw code('bad_request','org_id, delegator_id, payload, envelope required');
   assertOrgUsable(org_id);
@@ -263,12 +273,12 @@ function registerDelegation({ org_id, delegator_id, payload, envelope, callerIsA
     if(parentToken.sub!==delegator_id)throw code('delegation_not_authorized','parent delegation is not owned by delegator');
     assertTokenUsable(parentToken);
     const c=verified.constraints||{}, has=k=>Object.prototype.hasOwnProperty.call(c,k);
-    const childScope=Array.isArray(verified.scope)?verified.scope:(parentToken.scope||[]);
-    const childResources=Array.isArray(verified.resources)?verified.resources:(parentToken.resources||[]);
+    const childScope=verified.scope!=null?strictStringArray(verified.scope,'scope',{required:true}):(parentToken.scope||[]);
+    const childResources=verified.resources!=null?strictStringArray(verified.resources,'resources',{required:true}):(parentToken.resources||[]);
     if(!patternsSubset(childScope,parentToken.scope||[]))throw code('attenuation_violation','scope widening rejected');
     if(!patternsSubset(childResources,parentToken.resources||[]))throw code('attenuation_violation','resource widening rejected');
     const parentTargets=parentToken.constraints?.allowed_targets||[];
-    const childTargets=has('allowed_targets')?(Array.isArray(c.allowed_targets)?c.allowed_targets:[]):parentTargets;
+    const childTargets=has('allowed_targets')?strictStringArray(c.allowed_targets,'constraints.allowed_targets'):parentTargets;
     if(parentTargets.length&&(!childTargets.length||!patternsSubset(childTargets,parentTargets)))throw code('attenuation_violation','target widening rejected');
     const parentSpend=parentToken.constraints?.max_spend_cents??Number.MAX_SAFE_INTEGER;
     const childSpend=has('max_spend_cents')?Number(c.max_spend_cents):parentSpend;
@@ -287,14 +297,14 @@ function registerDelegation({ org_id, delegator_id, payload, envelope, callerIsA
   }
   if(_store().has('tokens',verified.jti))throw code('bad_request','delegation jti already registered');
   const c=verified.constraints||{}, has=k=>Object.prototype.hasOwnProperty.call(c,k);
-  const scope=Array.isArray(verified.scope)?verified.scope:(parentToken?.scope||[]);
-  const resources=Array.isArray(verified.resources)?verified.resources:(parentToken?.resources||[]);
-  const targets=has('allowed_targets')?(Array.isArray(c.allowed_targets)?c.allowed_targets:[]):(parentToken?.constraints?.allowed_targets||[]);
+  const scope=verified.scope!=null?strictStringArray(verified.scope,'scope',{required:true}):(parentToken?.scope||[]);
+  const resources=verified.resources!=null?strictStringArray(verified.resources,'resources',{required:true}):(parentToken?.resources||[]);
+  const targets=has('allowed_targets')?strictStringArray(c.allowed_targets,'constraints.allowed_targets'):(parentToken?.constraints?.allowed_targets||[]);
   const maxSpend=has('max_spend_cents')?Number(c.max_spend_cents):(parentToken?.constraints?.max_spend_cents??Number.MAX_SAFE_INTEGER);
   const notAfter=has('not_after')?normalizeNotAfter(c.not_after):(parentToken?.constraints?.not_after??null);
   const maxDepth=has('max_depth')?Number(c.max_depth):(parentToken?.constraints?.max_depth??MAX_DEPTH);
   const requireApproval=has('require_approval')?!!c.require_approval:!!parentToken?.constraints?.require_approval;
-  if(!Array.isArray(scope)||!scope.length||!Array.isArray(resources)||!resources.length)throw code('bad_request','delegation scope/resources must not be empty');
+  if(!scope.length||!resources.length)throw code('bad_request','delegation scope/resources must not be empty');
   if(!Number.isSafeInteger(maxSpend)||maxSpend<0)throw code('bad_request','max_spend_cents must be a non-negative safe integer');
   if(!Number.isInteger(maxDepth)||maxDepth<0||maxDepth>MAX_DEPTH)throw code('bad_request','max_depth out of range');
   if(notAfter!=null&&notAfter<=Date.now())throw code('bad_request','delegation already expired');
@@ -340,10 +350,27 @@ function debitBudget(tok,amount_cents) {
   return tok;
 }
 
+let revSeq = 0;
+let revSeqInitialized = false;
+function ensureRevocationSeq() {
+  if (revSeqInitialized) return;
+  revSeq = _store().all('revocations').reduce((max, r) => {
+    const n = Number(r.seq);
+    return Number.isSafeInteger(n) && n > max ? n : max;
+  }, 0);
+  revSeqInitialized = true;
+}
+function revocationHead() {
+  ensureRevocationSeq();
+  return revSeq;
+}
 function addRevocation({ type, target, reason, org_id, kid = null }) {
-  const { revSeq } = require('./server');
-  revSeq++;
-  const rec = { id: `${type}:${target}${kid ? ':' + kid : ''}`, seq: revSeq, type, target, kid: kid || null, org_id, reason: reason || 'manual', at: Date.now() };
+  ensureRevocationSeq();
+  const id = String(type) + ':' + String(target) + (kid ? ':' + kid : '');
+  const existing = _store().get('revocations', id);
+  if (existing) return existing;
+  if (revSeq >= Number.MAX_SAFE_INTEGER) throw code('storage_error', 'revocation sequence exhausted');
+  const rec = { id, seq: ++revSeq, type, target, kid: kid || null, org_id, reason: reason || 'manual', at: Date.now() };
   _store().put('revocations', rec);
   return rec;
 }
