@@ -3,6 +3,14 @@
 const { Signer } = require('../signer');
 const crypto = require('node:crypto');
 
+function decodeVaultSignature(value) {
+  const parts = String(value || '').split(':');
+  if (parts.length !== 3 || parts[0] !== 'vault' || !/^v\d+$/.test(parts[1]) || !parts[2]) {
+    throw new Error('Vault returned an invalid signature envelope');
+  }
+  return Buffer.from(parts[2], 'base64');
+}
+
 class VaultSigner extends Signer {
   constructor(opts = {}) {
     super();
@@ -70,7 +78,7 @@ class VaultSigner extends Signer {
       input,
       algorithm: 'ecdsa-p256-sha256'
     });
-    return Buffer.from(resp.data.signature.split(':')[1], 'base64').toString('base64url');
+    return decodeVaultSignature(resp.data.signature).toString('base64url');
   }
 
   async signCheckpoint(data) {
@@ -79,7 +87,7 @@ class VaultSigner extends Signer {
       input,
       algorithm: 'ecdsa-p256-sha256'
     });
-    return Buffer.from(resp.data.signature.split(':')[1], 'base64').toString('base64url');
+    return decodeVaultSignature(resp.data.signature).toString('base64url');
   }
 
   async signBytes(data) { return this.signOrgRoot(Buffer.from(data)); }
@@ -94,4 +102,4 @@ class VaultSigner extends Signer {
   }
 }
 
-module.exports = { VaultSigner };
+module.exports = { VaultSigner, decodeVaultSignature };
