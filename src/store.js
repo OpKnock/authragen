@@ -57,6 +57,16 @@ class PersistentMirrorStore {
   has(col,id){ return !!this.mem[col]?.[id]; }
   async consumeNonce(...args){ return this.remote.consumeNonce(...args); } async nonceExists(...args){ return this.remote.nonceExists?this.remote.nonceExists(...args):false; }
   async consumeActionJTI(...args){ return this.remote.consumeActionJTI(...args); } async actionJTIExists(...args){ return this.remote.actionJTIExists?this.remote.actionJTIExists(...args):false; }  async checkAndDebitExecution(...args){ if(!this.remote.checkAndDebitExecution) return null; return this.remote.checkAndDebitExecution(...args); }  async getTokenSpend(...args){ if(!this.remote.getTokenSpend) return null; return this.remote.getTokenSpend(...args); }
+  async addRevocation(revocation){
+    if(this.backendType === 'file' || !this.remote.addRevocation) return null;
+    const rec=await this.remote.addRevocation(revocation);
+    if(rec?.id) this.mem.revocations[rec.id]=rec;
+    return rec;
+  }
+  async getRevocationHead(){
+    if(this.backendType === 'file' || !this.remote.getRevocationHead) return null;
+    return this.remote.getRevocationHead();
+  }
   async close(){ await this.writeChain; if(this.remote.close)await this.remote.close(); } backend(){ return this.backendType; }
 }
 
