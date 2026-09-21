@@ -35,13 +35,13 @@ d = me.authorize(i, me.sign_intent(i, shopK))
 ex = me.execute(d["action_token"], i)
 print("read:", d["decision"], "-> executed", ex["ok"], ex["receipt"]["id"])
 
-appr_key = admin.mint_key(org["id"], "approver", "py")["secret"]
-approver = AuthraGen(BASE, key=appr_key)
+appr_key = admin.mint_key(org["id"], "approver", "py")
+approver = AuthraGen(BASE, key=appr_key["credential"] or appr_key["key_id"] + "." + appr_key["secret"])
 i = me.intent(shopper["id"], org["id"], "payments.charge", "stripe:inv:7", amount_cents=1200)
 d = me.authorize(i, me.sign_intent(i, shopK))
 print("payment:", d["decision"], "| risk", d["risk"])
 ap = approver.approve(d["approval_id"], True, "py-human")
-ex = me.execute(ap["action_token"], i, ap["approval_credential"])
+ex = me.execute(ap["action_token"], i, approval=ap["approval_credential"])
 print("approved+executed:", ex["ok"], ex["receipt"]["id"])
 try:
     me.execute(ap["action_token"], i, ap["approval_credential"])
