@@ -135,4 +135,4 @@ openapi:
 
 # Verify audit chain
 audit-verify:
-	node -e "const {verifyAuditChain}=require('./src/audit.js'); verifyAuditChain().then(r=>console.log(r))"
+	node -e "console.log(require('./src/audit.js').verify())"
