@@ -8,6 +8,7 @@ const crypto = require('node:crypto');
 class AzureKmsSigner extends Signer {
   constructor(opts = {}) {
     super();
+    this.algorithm = 'ES256';
     this.vaultUrl = opts.vaultUrl || process.env.AUTHRA_AZURE_KEYVAULT_URL;
     this.orgKeyName = opts.orgKeyName || process.env.AUTHRA_AZURE_ORG_KEY_NAME || 'authragen-org';
     this.checkpointKeyName = opts.checkpointKeyName || process.env.AUTHRA_AZURE_CHECKPOINT_KEY_NAME || 'authragen-checkpoint';
@@ -41,6 +42,8 @@ class AzureKmsSigner extends Signer {
     this._checkpointCrypto = new CryptographyClient(cpKey.id, this.credential);
   }
 
+  getAlgorithm() { return this.algorithm; }
+
   getOrgPublicKey() {
     return this._orgPubKey.export({ type: 'spki', format: 'der' }).toString('base64url');
   }
@@ -60,6 +63,9 @@ class AzureKmsSigner extends Signer {
     const result = await this._checkpointCrypto.sign('ES256', digest);
     return Buffer.from(result.result).toString('base64url');
   }
+
+  async signBytes(data) { return this.signOrgRoot(Buffer.from(data)); }
+  async signCanonical(obj) { const { canonical } = require('../crypto'); return this.signBytes(Buffer.from(canonical(obj), 'utf8')); }
 
   async verifyOrgRoot(data, signature) {
     return crypto.verify('sha256', Buffer.from(data), this._orgPubKey, Buffer.from(signature, 'base64url'));
