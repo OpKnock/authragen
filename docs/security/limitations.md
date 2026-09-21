@@ -33,7 +33,7 @@
 |------------|--------|------------|
 | Tamper-evident ≠ immutable | Full rewrite possible without anchor | `AUTHRA_ANCHOR_URL` to Rekor/timestamp service |
 | No built-in transparency log | Anchor hook only | Bring your own Rekor/TLSNotary |
-| Audit/checkpoint files remain local to `AUTHRA_DATA` | The configured state adapter does not currently make the audit chain database-backed | Use persistent storage plus export/external anchoring; integrate centralized audit storage before claiming database-backed audit durability |
+| Audit durability depends on configured backend | Postgres/Redis modes persist receipts and checkpoints in the configured durable backend; file mode remains single-instance development storage | Use Postgres/Redis for shared deployments; use backups/DR and external anchoring where immutability requirements demand it |
 | Checkpoint key = single point | Compromise = fake checkpoints | Separate key; KMS-backed; rotation |
 | No log compression | Linear growth | Periodic export + archive (manual) |
 
@@ -103,9 +103,13 @@
 - [ ] Verifiable credentials (W3C VC) interop
 - [ ] Formal verification of attenuation logic
 
+## Validation Boundary
+
+The repository now includes centralized audit persistence, distributed storage/atomicity smoke tests, and a repeatable concurrent load harness. Real cloud-provider KMS validation is available as a gated GitHub Actions workflow and requires credentials/identity configuration for the target AWS/GCP/Azure environments. Those provider runs are evidence-producing deployment tests, not something the repository can honestly self-assert.
+
 ## Honest Assessment
 
-**AuthraGen is an implementation-ready self-hosted control plane with explicit deployment boundaries.**
+**AuthraGen is a production-capable self-hosted control plane with explicit deployment boundaries.**
 The repository includes Postgres/Redis storage adapters, pluggable KMS backends, signed
 credentials, audit/checkpointing, a browser control plane and adversarial end-to-end tests.
 Production operation still requires sound key management, TLS, backups/DR, monitoring,
