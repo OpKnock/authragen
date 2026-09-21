@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 class AwsKmsSigner extends Signer {
   constructor(opts = {}) {
     super();
+    this.algorithm = 'ES256';
     this.region = opts.region || process.env.AWS_REGION || 'us-east-1';
     this.orgKeyId = opts.orgKeyId || process.env.AUTHRA_AWS_KMS_ORG_KEY_ID;
     this.checkpointKeyId = opts.checkpointKeyId || process.env.AUTHRA_AWS_KMS_CHECKPOINT_KEY_ID;
@@ -39,6 +40,8 @@ class AwsKmsSigner extends Signer {
     });
   }
 
+  getAlgorithm() { return this.algorithm; }
+
   getOrgPublicKey() {
     return this._orgPubKey.export({ type: 'spki', format: 'der' }).toString('base64url');
   }
@@ -68,6 +71,9 @@ class AwsKmsSigner extends Signer {
     const resp = await this.client.send(cmd);
     return resp.Signature.toString('base64url');
   }
+
+  async signBytes(data) { return this.signOrgRoot(Buffer.from(data)); }
+  async signCanonical(obj) { const { canonical } = require('../crypto'); return this.signBytes(Buffer.from(canonical(obj), 'utf8')); }
 
   async verifyOrgRoot(data, signature) {
     return crypto.verify('sha256', Buffer.from(data), this._orgPubKey, Buffer.from(signature, 'base64url'));
