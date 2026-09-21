@@ -386,4 +386,4 @@ function addRevocation({ type, target, reason, org_id, kid = null }) {
   return rec;
 }
 
-module.exports = { rid: require('./crypto').rid, createOrgRecord, publicOrg, orgPubkey, issuePassport, publicPassport, rotatePassport, setPassportStatus, revokeKey, touchLastSeen, passportStatus, LIFECYCLE, createBlueprint, blueprintInstances, isOrgLocked, assertOrgUsable, assertPassportUsable, keyFor, registerDelegation, assertTokenUsable, tokenCovers, checkBudget, debitBudget, allowCustody, isPassportRevoked, addRevocation, revocationHead };
+module.exports = { rid: require('./crypto').rid, createOrgRecord, publicOrg, orgPubkey, issuePassport, publicPassport, rotatePassport, setPassportStatus, revokeKey, touchLastSeen, passportStatus, LIFECYCLE, createBlueprint, blueprintInstances, isOrgLocked, assertOrgUsable, assertPassportUsable, keyFor, registerDelegation, assertTokenUsable, tokenCovers, checkBudget, debitBudget, allowCustody, isPassportRevoked, addRevocation, revocationHead, checkBudgetFresh };
