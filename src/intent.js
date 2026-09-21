@@ -136,10 +136,24 @@ function checkEnvelopeShape(payload, { kinds = ['action', 'approval'] } = {}) {
   if (payload.v !== PROTOCOL_VERSION && payload.v !== 1) throw code('token_malformed', `unsupported protocol version (got ${payload.v}, want ${PROTOCOL_VERSION})`);
   if (!kinds.includes(payload.kind)) throw code('token_malformed', `unexpected credential kind (got ${payload.kind})`);
   for (const f of ['jti', 'org_id', 'iat', 'exp', 'issuer', 'aud']) {
-    if (payload.kind === 'approval' && f === 'jti') continue;
     if (payload[f] == null || payload[f] === '') throw code('token_malformed', `credential missing ${f}`);
   }
-  if (typeof payload.iat !== 'number' || typeof payload.exp !== 'number') throw code('token_malformed', 'iat/exp must be numbers');
+  if (typeof payload.iat !== 'number' || typeof payload.exp !== 'number' ||
+      !Number.isSafeInteger(payload.iat) || !Number.isSafeInteger(payload.exp) || payload.exp <= payload.iat) {
+    throw code('token_malformed', 'iat/exp must be safe integer timestamps with exp > iat');
+  }
+  if (payload.issuer !== 'authragen-gateway') throw code('token_malformed', 'issuer mismatch');
+  if (payload.kind === 'action') {
+    for (const f of ['sub', 'intent_hash', 'action', 'resource']) {
+      if (payload[f] == null || payload[f] === '') throw code('token_malformed', `action credential missing ${f}`);
+    }
+  }
+  if (payload.kind === 'approval') {
+    for (const f of ['approval_id', 'intent_hash', 'decision', 'sub']) {
+      if (payload[f] == null || payload[f] === '') throw code('token_malformed', `approval credential missing ${f}`);
+    }
+    if (payload.decision !== 'approved') throw code('token_malformed', 'approval credential is not approved');
+  }
   return true;
 }
 async function buildActionToken({ orgSigner, org_id, sub, intent_hash, action, resource, amount_cents, requires_approval, token_jti = null, aud = 'authragen', kid = null }) {
