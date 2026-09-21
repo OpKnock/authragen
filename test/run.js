@@ -455,6 +455,17 @@ async function waitHealth(base, tries = 60) {
     const checkpoint = await admin.checkpoint();
     ok(!!checkpoint.hash && !!checkpoint.signature, 'signed audit checkpoint');
     ok((await admin.auditVerify(org_id)).ok === true, 'audit chain verifies');
+    // registered-token verification is tenant-bound
+    {
+      const vk = admin.generateKeypair();
+      const vp = await admin.issuePassport(org_id, 'verify-token-' + Date.now().toString(36), { pubkey: vk.pub });
+      const vt = await admin.delegate({ org_id, delegator_id: vp.id, delegatorPriv: vk, scope: ['data.read'], resources: ['verify:*'] });
+      const good = await anon._call('/v1/verify', 'POST', { token_id: vt.id, org_id });
+      ok(good.ok === true && good.jti === vt.id, 'registered token verifies for owning org');
+      await throwsAsync(() => anon._call('/v1/verify', 'POST', { token_id: vt.id, org_id: 'org_other' }), /token_unknown|token_mismatch/, 'registered token cannot be verified across orgs');
+      await throwsAsync(() => anon._call('/v1/verify', 'POST', { token_id: vt.id }), /org_id required/, 'registered token verification requires org id');
+    }
+
     // revocation feed versioned
     {
       const feed = await admin.revoked(org_id, 0);
