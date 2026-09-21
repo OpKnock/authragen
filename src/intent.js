@@ -1,6 +1,6 @@
 'use strict';
 const crypto = require('node:crypto');
-const { canonical, sha256hex, rid, b64uJsonEncode, b64uJsonDecode, b64uDecode, pubKeyFromB64u } = require('./crypto');
+const { canonical, sha256hex, rid, b64uJsonEncode, b64uJsonDecode, b64uDecode, pubKeyFromWire, verifyBytes } = require('./crypto');
 
 const INTENT_TTL_S = Number(process.env.AUTHRA_INTENT_TTL_S || 120);
 const ACTION_TOKEN_TTL_S = Number(process.env.AUTHRA_ACTION_TTL_S || 120);
@@ -108,10 +108,14 @@ function verifyAgentIntent(intent, sigB64u, passportPubB64u) {
   return true;
 }
 
-function sealWith(privSignFn, payload) {
-  const header = { alg: 'EdDSA', typ: 'AR1', v: 1 };
+async function sealWith(signerOrFn, payload, alg = 'EdDSA') {
+  const signer = typeof signerOrFn === 'function' ? null : signerOrFn;
+  const signFn = signer ? (signer.signBytes ? (data => signer.signBytes(data)) : signer.signCheckpoint) : signerOrFn;
+  const selectedAlg = signer?.getAlgorithm ? signer.getAlgorithm() : (signer?.algorithm || alg);
+  if (!['EdDSA','ES256'].includes(selectedAlg)) throw code('token_malformed', 'unsupported signer algorithm');
+  const header = { alg: selectedAlg, typ: 'AR1', v: 1 };
   const h = b64uJsonEncode(header), p = b64uJsonEncode(payload);
-  const sig = privSignFn(Buffer.from(h + '.' + p, 'utf8'));
+  const sig = await signFn(Buffer.from(h + '.' + p, 'utf8'));
   return `AR1.${h}.${p}.${sig}`;
 }
 function openWithOrgKey(envelope, orgPubB64u) {
@@ -121,9 +125,10 @@ function openWithOrgKey(envelope, orgPubB64u) {
   let header, payload;
   try { header = b64uJsonDecode(h); payload = b64uJsonDecode(p); }
   catch { throw code('token_malformed', 'envelope encoding invalid'); }
-  if (header.alg !== 'EdDSA' || header.typ !== 'AR1') throw code('token_malformed', 'unsupported envelope alg/typ (algorithm confusion rejected)');
-  const ok = crypto.verify(null, Buffer.from(h + '.' + p, 'utf8'), pubKeyFromB64u(orgPubB64u), b64uDecode(s));
-  if (!ok) throw code('sig_invalid', 'envelope signature invalid');
+  if (header.v !== 1 || header.typ !== 'AR1' || !['EdDSA','ES256'].includes(header.alg)) throw code('token_malformed', 'unsupported envelope alg/typ (algorithm confusion rejected)');
+  let pubKey;
+  try { pubKey = pubKeyFromWire(orgPubB64u, header.alg); } catch { throw code('token_malformed', 'organization public key encoding invalid'); }
+  if (!verifyBytes(Buffer.from(h + '.' + p, 'utf8'), s, pubKey, header.alg)) throw code('sig_invalid', 'envelope signature invalid');
   return { header, payload };
 }
 function checkEnvelopeShape(payload, { kinds = ['action', 'approval'] } = {}) {
@@ -137,7 +142,7 @@ function checkEnvelopeShape(payload, { kinds = ['action', 'approval'] } = {}) {
   if (typeof payload.iat !== 'number' || typeof payload.exp !== 'number') throw code('token_malformed', 'iat/exp must be numbers');
   return true;
 }
-function buildActionToken({ orgSigner, org_id, sub, intent_hash, action, resource, amount_cents, requires_approval, token_jti = null, aud = 'authragen', kid = null }) {
+async function buildActionToken({ orgSigner, org_id, sub, intent_hash, action, resource, amount_cents, requires_approval, token_jti = null, aud = 'authragen', kid = null }) {
   const now = Date.now();
   const payload = {
     v: PROTOCOL_VERSION, kind: 'action', jti: rid('att'), kid: kid || undefined,
@@ -147,9 +152,9 @@ function buildActionToken({ orgSigner, org_id, sub, intent_hash, action, resourc
     max_uses: 1, iat: now, exp: now + ACTION_TOKEN_TTL_S * 1000, issuer: 'authragen-gateway',
     sub_kind: 'agent',
   };
-  return { jti: payload.jti, envelope: sealWith(orgSigner.signBytes, payload), payload };
+  return { jti: payload.jti, envelope: await sealWith(orgSigner, payload), payload };
 }
-function buildApproval({ orgSigner, approval_id, org_id, passport_id, intent_hash, action, resource, by, by_role = 'approver', by_key_id = null, action_jti = null, aud = 'authragen' }) {
+async function buildApproval({ orgSigner, approval_id, org_id, passport_id, intent_hash, action, resource, by, by_role = 'approver', by_key_id = null, action_jti = null, aud = 'authragen' }) {
   const now = Date.now();
   const payload = {
     v: PROTOCOL_VERSION, kind: 'approval', approval_id, jti: approval_id,
@@ -158,7 +163,7 @@ function buildApproval({ orgSigner, approval_id, org_id, passport_id, intent_has
     decision: 'approved', by, by_role, by_key_id, at: now, exp: now + APPROVAL_TTL_S * 1000,
     aud: aud || 'authragen', issuer: 'authragen-gateway',
   };
-  return { envelope: sealWith(orgSigner.signBytes, payload), payload };
+  return { envelope: await sealWith(orgSigner, payload), payload };
 }
 
 const SIDE_EFFECT = [/^payments\./, /^admin\./, /^external\.send/, /^code\.exec/, /^data\.write/];
