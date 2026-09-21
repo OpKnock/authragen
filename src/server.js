@@ -623,7 +623,7 @@ async function main() {
           const pass = await setPassportStatus(id, b.status);
           let revocation = null;
           if (b.status === 'revoked' && !getStore().has('revocations', 'passport:' + id)) {
-            revocation = addRevocation({ type: 'passport', target: id, org_id: pass.org_id, reason: b.reason || 'status:revoked' });
+            revocation = await addRevocation({ type: 'passport', target: id, org_id: pass.org_id, reason: b.reason || 'status:revoked' });
           }
           audit.append({
             org_id: pass.org_id, actor: callerKey(req)?.id || 'admin', action: `passport.${b.status}`, resource: id, decision: 'allow', risk: 5, policy_id: null,
@@ -641,7 +641,7 @@ async function main() {
           auth.requireRole(callerKey(req), cur.org_id, 'admin');
           if (!b.kid) throw Object.assign(new Error('kid required'), { code: 'bad_request' });
           const pass = await revokeKey(id, b.kid);
-          addRevocation({ type: 'key', target: id, kid: b.kid, org_id: pass.org_id, reason: b.reason });
+          await addRevocation({ type: 'key', target: id, kid: b.kid, org_id: pass.org_id, reason: b.reason });
           return ok(200, pass);
         } catch (e) { return fail(e); }
       }
@@ -848,7 +848,7 @@ async function main() {
           if (b.type === 'key') { await revokeKey(b.id, b.kid); }
           if (b.type === 'blueprint') { const bp = getStore().get('blueprints', b.id); if (bp) { bp.status = 'revoked'; getStore().put('blueprints', bp); } }
           if (b.type === 'org') { const o = getStore().get('orgs', b.id); if (o) { o.locked = true; o.locked_at = Date.now(); getStore().put('orgs', o); } }
-          const rec = addRevocation({ type: b.type, target: b.id, kid: b.kid || null, org_id: targetOrg, reason: b.reason });
+          const rec = await addRevocation({ type: b.type, target: b.id, kid: b.kid || null, org_id: targetOrg, reason: b.reason });
           const rc = audit.append({ org_id: targetOrg, actor: 'admin', action: `${b.type}.revoke`, resource: b.id, decision: 'revoked', risk: 0, policy_id: null, reasons: [b.reason || 'manual', 'cascade:children-fail-closed', `seq:${rec.seq}`], request_id: req._rid });
           return ok(200, { ok: true, revoked: rec.id, seq: rec.seq, cascade: 'children fail closed (passports→sub-agents, tokens→children, blueprints→agents, org→all)', receipt: rc, request_id: req._rid });
         } catch (e) { return fail(e); }
@@ -865,7 +865,7 @@ async function main() {
             .filter(r => (!r.org_id || r.org_id === org))
             .filter(r => (r.at || 0) >= since && (r.seq || 0) > sinceSeq)
             .sort((a, b) => (a.seq || 0) - (b.seq || 0));
-          return ok(200, { revocations: all, as_of: Date.now(), head_seq: revocationHead(), freshness_note: 'ONLINE live status. Offline verifiers: cache this feed + checkpoints; without a fresh feed you have authenticity-without-freshness.' });
+          return ok(200, { revocations: all, as_of: Date.now(), head_seq: await revocationHead(), freshness_note: 'ONLINE live status. Offline verifiers: cache this feed + checkpoints; without a fresh feed you have authenticity-without-freshness.' });
         } catch (e) { return fail(e); }
       }
 
