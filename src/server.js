@@ -18,6 +18,7 @@ const { canonicalIntent, intentHash, checkIntentShape, verifyAgentIntent, openWi
 const { hasDuplicateKeys } = require('./crypto');
 const { createLogger } = require('./logger');
 const { createMetrics } = require('./metrics');
+const nonceStore = require('./nonce');
 
 const PORT = process.env.PORT || 8787;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -267,12 +268,11 @@ async function execute({ action_token, intent, approval, request_id = null }) {
         tok = getStore().get('tokens', att.token_jti);
         if (!tok || tok.org_id !== ci.org_id) throw Object.assign(new Error('Unknown delegation token'), { code: 'token_unknown' });
         assertTokenUsable(tok);
-        if (!tokenCovers(tok, ci.action, ci.resource)) throw Object.assign(new Error('Token scope/targets insufficient'), { code: 'scope_insufficient' });
+        if (!tokenCovers(tok, ci.action, ci.resource, ci.destination)) throw Object.assign(new Error('Token scope/targets insufficient'), { code: 'scope_insufficient' });
         checkBudget(tok, ci.amount_cents);
       }
-      const nonceStore = getStore();
-      if (!await nonceStore.consumeNonce(ci.org_id, ci.nonce, 600)) throw Object.assign(new Error('intent nonce already used (replay)'), { code: 'replay' });
-      if (!await nonceStore.consumeActionJTI(att.jti, 600)) throw Object.assign(new Error('action token already used (replay)'), { code: 'replay' });
+      if (!await nonceStore.consumeOnce(ci.org_id + ':' + ci.nonce, 10 * 60 * 1000)) throw Object.assign(new Error('intent nonce already used (replay)'), { code: 'replay' });
+      if (!await nonceStore.consumeActionJTI(att.jti, 10 * 60 * 1000)) throw Object.assign(new Error('action token already used (replay)'), { code: 'replay' });
       if (tok) debitBudget(tok, ci.amount_cents);
       touchLastSeen(ci.passport_id);
       const rc = audit.append({ org_id: ci.org_id, actor: ci.passport_id, action: ci.action, resource: ci.resource, token_jti: att.token_jti, intent_hash: hash, amount_cents: ci.amount_cents, destination: ci.destination, aud: ci.aud, decision: 'executed', risk: 0, policy_id: null, reasons: [`action_jti:${att.jti}`, 'intent-match', 'nonce-consumed', `approval:${approvalRec ? approvalRec.by + '/' + (approvalRec.by_key_id || '') : 'n/a'}`, `executor:${approvalRec ? 'approval-bound' : 'direct'}`], action_jti: att.jti, approval_id: approvalRec?.approval_id || null, request_id: rid });
