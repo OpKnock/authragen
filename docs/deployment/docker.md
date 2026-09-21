@@ -201,11 +201,11 @@ spec:
 - [ ] **CORS** - `AUTHRA_CORS` set to exact origins (not `*`)
 - [ ] **KMS** - `AUTHRA_KMS=aws|gcp|vault|azure` (not file-backed)
 - [ ] **Anchor** - `AUTHRA_ANCHOR_URL` configured for transparency log
-- [ ] **Storage** - Postgres for primary, Redis for nonce/budget atomicity
+- [ ] **Storage** - Postgres/Redis for durable record and distributed replay primitives; keep one gateway instance until cross-instance budget coordination is added
 - [ ] **Secrets** - No secrets in images/configmaps; use Vault/SealedSecrets
 - [ ] **Monitoring** - `/health` + `/metrics` (Prometheus) scraped
 - [ ] **Logging** - Structured JSON logs to centralized system
-- [ ] **Rate Limits** - Tuned for expected traffic (`AUTHRA_RATE_LIMIT_MAX`)
+- [ ] **Rate Limits** - Tune the gateway's per-route limits or enforce limits at the trusted ingress
 - [ ] **Body Limits** - `AUTHRA_BODY_LIMIT` appropriate for payloads
 - [ ] **Quotas** - Per-org quotas configured
 - [ ] **Backups** - PVC snapshots + revocation feed exports
@@ -240,8 +240,9 @@ spec:
 const pg = require('pg');
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
-// Implement store interface with transactions
-// Required for: budgets, nonce/action-jti, revocation seq, audit
+// The current gateway uses the generic durable-record mirror for control-plane state.
+// Replay primitives are backed by the adapter; audit/checkpoint data remains file-backed.
+// Cross-instance token-budget atomicity is not yet implemented.
 ```
 
 ## Redis Adapter (Production)
@@ -253,7 +254,8 @@ const redis = new Redis(process.env.REDIS_URL);
 
 // Nonce: SET nonce:{org}:{nonce} EX 3600 NX
 // Action JTI: SET action:{jti} EX 3600 NX
-// Budgets: DECRBY budget:{org}:{passport} {amount} (Lua atomic)
+// Distributed replay uses Redis atomic primitives. Token spend state is currently mirror-backed,
+// so run one gateway instance until cross-instance budget coordination is added.
 ```
 
 ## Monitoring
