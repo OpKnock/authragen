@@ -59,8 +59,8 @@
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
 | One gateway deployment currently uses one signing root for its org namespace | A single root-key compromise affects all orgs in that deployment | Use separate deployments for stronger tenant isolation; per-org KMS roots are future work |
-| OIDC interactive SSO is not a built-in dashboard flow | Federated API/service authentication is supported; browser SSO still belongs at a trusted proxy or future console integration | Configure OIDC bearer federation or an OIDC-aware reverse proxy |
-| No SPIFFE identity issuance | AuthraGen validates X.509-SVID/JWT-SVID identities and can consume the SPIFFE Workload API; issuance remains the SPIRE/mesh responsibility | Run SPIRE as the workload identity provider |
+| Interactive dashboard SSO is not built into the console | OIDC federation is available for API/service authentication; browser session SSO remains a deployment concern | Put the console behind an OIDC-aware reverse proxy |
+| SPIFFE identity issuance is delegated to SPIRE | AuthraGen validates X.509-SVID/JWT-SVID identities and can consume the SPIFFE Workload API; AuthraGen does not replace a SPIRE control plane | Use SPIRE to issue workload identities |
 | No standard token format | AR1 proprietary | JWT-compatible structure; converter possible |
 | MCP/A2A = custom adapters | Not native protocols | Adapters implement contract |
 
@@ -77,7 +77,6 @@
 
 ### Next
 - [ ] Push/webhook revocation distribution
-- [ ] Dashboard interactive OIDC SSO
 - [ ] JWT/W3C Verifiable Credential interoperability profiles
 - [ ] Log compression, archival and retention controls
 - [ ] Cross-instance distributed locking / linearizable writes for every control-plane mutation
@@ -97,6 +96,8 @@
 
 ### v3.0 (Research)
 - [x] ML-DSA-44/65/87 credential profile
+- [x] OIDC federation verifier + bearer authentication
+- [x] SPIFFE X.509-SVID/JWT-SVID validation + Workload API client
 - [ ] Zero-knowledge proofs for policy evaluation
 - [ ] Verifiable credentials (W3C VC) interop
 - [ ] Formal verification of attenuation logic
