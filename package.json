@@ -23,13 +23,20 @@
     "test:ci": "AUTHRA_DATA=$(mktemp -d) node test/run.js",
     "lint": "eslint src/ sdk-js/ adapters/ examples/ test/",
     "lint:fix": "eslint src/ sdk-js/ adapters/ examples/ test/ --fix",
-    "typecheck": "node --check src/server.js && node --check src/tokens.js && node --check src/intent.js && node --check src/policy.js && node --check src/auth.js && node --check src/audit.js && node --check src/store.js && node --check src/signer.js && node --check src/nonce.js && node --check src/crypto.js && node --check src/risk.js && node --check sdk-js/authragen.js",
+    "typecheck": "node --check src/server.js && node --check src/tokens.js && node --check src/intent.js && node --check src/policy.js && node --check src/auth.js && node --check src/audit.js && node --check src/store.js && node --check src/signer.js && node --check src/nonce.js && node --check src/crypto.js && node --check src/risk.js && node --check src/oidc.js && node --check src/spiffe-runtime.js && node --check src/pq.js && node --check sdk-js/authragen.js",
     "security:audit": "npm audit --audit-level=high",
     "security:deps": "npx depcheck",
     "bench": "node test/bench.js",
     "docs:dev": "npx vitepress dev docs",
     "docs:build": "npx vitepress build docs",
-    "test:audit": "node test/audit_persistent.js"
+    "test:audit": "node test/audit_persistent.js",
+    "test:oidc": "node test/oidc.js",
+    "test:spiffe": "node test/spiffe.js",
+    "test:federation": "npm run test:oidc && npm run test:spiffe",
+    "test:pq": "node test/pq.js",
+    "test:distributed": "node test/persistence_smoke.js",
+    "test:multi": "node test/multi_instance_http.js",
+    "test:load": "node test/load.js"
   },
   "engines": {
     "node": ">=22.13.0"
