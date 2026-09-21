@@ -69,7 +69,8 @@ const DATA = process.env.AUTHRA_DATA || path.join(__dirname, '..', 'data');
   console.log('4 target escape:', d.decision, '|', (d.reasons || []).join(',').slice(0, 80));
 
   // 5. payment → step_up → approver credential → execute; then swap + replay negatives
-  const approver = new AuthraGen({ baseUrl: BASE, key: (await admin.mintKey(org.id, 'approver', 'demo')).secret });
+  const approverKey = await admin.mintKey(org.id, 'approver', 'demo');
+  const approver = new AuthraGen({ baseUrl: BASE, key: approverKey.credential || `${approverKey.key_id}.${approverKey.secret}` });
   i = me.intent({ passport_id: shopper.id, org_id: org.id, action: 'payments.charge', resource: 'stripe:invoice:42', amount_cents: 499, destination: 'stripe:merchant123' });
   d = await me.authorize(i, me.signIntent(i, shopK));
   console.log('5 payment:', d.decision, '| approval', d.approval_id, '| risk', d.risk);
