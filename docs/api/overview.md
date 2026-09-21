@@ -32,7 +32,7 @@ curl -H "Authorization: Bearer ${AUTHRA_API_KEY}" ...
 | `POST /v1/authorize` | 100 | 1 min |
 | `POST /v1/execute` | 100 | 1 min |
 | `POST /v1/verify` | 60 | 1 min |
-| Default | 100 | 1 min |
+| Other rate-limited routes | Route-specific | 1 min |
 
 ## Endpoints
 
