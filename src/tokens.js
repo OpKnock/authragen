@@ -138,7 +138,7 @@ async function issuePassport({ org_id, name, kind = 'agent', pubkey, blueprint_i
     did:null, keys:null, grace_period_s:Math.max(0, Number(grace_period_s)||DEFAULT_GRACE_S),
     status:'active', iat:now, exp:0, last_seen:null, signature:null };
   if (serverCustody) {
-    const kp=generateEd25519(); finalPubkey=kp.pub; pass._privX=kp.pub; pass._privD=kp.privB64u;
+    const kp=generateEd25519(); finalPubkey=kp.pubB64u; pass._privX=kp.pubB64u; pass._privD=kp.privB64u;
   }
   pass.did=didFor(finalPubkey);
   pass.keys={current:{kid:'k1',pubkey:finalPubkey,since:now},history:[]};
