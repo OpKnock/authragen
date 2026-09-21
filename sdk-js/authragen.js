@@ -63,8 +63,10 @@ class AuthraGen {
   createIntent(args) { return this.intent(args); }
   intentHash(intent) { return sha256hex(canonical(intent)); }
   signIntent(intent, priv) {
-    const k = typeof priv === 'string' ? jwkPriv(intent && priv, priv) : null;
-    const key = k || jwkPriv(priv.x, priv.d);
+    if (!priv || typeof priv !== 'object' || typeof priv.x !== 'string' || typeof priv.d !== 'string') {
+      throw new TypeError('signIntent requires a local Ed25519 keypair object with x and d fields');
+    }
+    const key = jwkPriv(priv.x, priv.d);
     return b64uEncode(crypto.sign(null, Buffer.from(canonical(intent), 'utf8'), key));
   }
   authorize(intent, intent_sig, { token_id = null, kid = null, context = {}, dry_run = false } = {}) {
@@ -121,7 +123,9 @@ class AuthraGen {
       out.payload = payload;
       if (!payload.jti || !payload.issuer || !payload.aud || !payload.iat || !payload.exp) { out.error = 'token_malformed'; return out; }
       if (payload.issuer !== 'authragen-gateway') { out.error = 'issuer_mismatch'; return out; }
-      if (expected_aud && payload.aud !== expected_aud && payload.aud !== 'authragen') { out.error = 'audience_mismatch'; return out; }
+      if (payload.v !== 2 && payload.v !== 1) { out.error = 'token_malformed'; return out; }
+      if (!['action', 'approval'].includes(payload.kind)) { out.error = 'token_malformed'; return out; }
+      if (expected_aud && payload.aud !== expected_aud) { out.error = 'audience_mismatch'; return out; }
       if (expected_intent_hash && payload.intent_hash !== expected_intent_hash) { out.error = 'intent_mismatch'; return out; }
       out.credential_valid = true;
       out.expiry_valid = Date.now() <= payload.exp;
