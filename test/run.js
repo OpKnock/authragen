@@ -96,6 +96,14 @@ async function waitHealth(base, tries = 60) {
       ok(aws.region === 'eu-west-1' && aws.orgKeyId === 'org-key', 'KMS factory passes external backend options correctly');
     }
 
+    // --- KMS adapter parsing invariants ---
+    {
+      const { decodeVaultSignature } = require('../src/kms/vault');
+      const raw = Buffer.from([0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01]);
+      ok(decodeVaultSignature('vault:v7:' + raw.toString('base64')).equals(raw), 'Vault signature envelope decodes payload bytes, not version');
+      try { decodeVaultSignature('vault:v7:'); ok(false, 'Vault malformed signature rejected'); } catch { ok(true, 'Vault malformed signature rejected'); }
+    }
+
     // --- cryptographic algorithm invariants ---
     {
       const { pubKeyFromWire } = require('../src/crypto');
@@ -656,6 +664,17 @@ async function waitHealth(base, tries = 60) {
         const ev = await admin._call('/v1/audit/evidence', 'POST', { org_id });
         ok(!!ev.bundle_hash, 'signed evidence bundle builds');
       } catch (e) { ok(false, 'evidence bundle', JSON.stringify(e.body || e.message).slice(0, 120)); }
+
+      // Syntactically corrupted audit data must fail closed rather than reset to an empty log.
+      try {
+        fs.appendFileSync(logPath, 'not-json\\n');
+        try {
+          await admin.auditVerify(org_id);
+          ok(false, 'corrupted audit syntax fails closed');
+        } catch (e) {
+          ok(/audit_corrupt|unreadable|malformed/.test(JSON.stringify(e.body || e.message)), 'corrupted audit syntax fails closed');
+        }
+      } catch (e) { ok(false, 'corrupted audit syntax probe', String(e).slice(0, 120)); }
     }
 
     console.log(`\n${pass} passed, ${fail} failed`);
