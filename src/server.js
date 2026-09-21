@@ -48,6 +48,13 @@ const logger = createLogger({ service: 'authragen', env: process.env.NODE_ENV ||
 const metrics = createMetrics();
 
 function newRequestId() { return 'rq_' + crypto.randomBytes(6).toString('hex'); }
+function metricRoute(path) {
+  const known = new Set(['/','/console','/v1/health','/health','/metrics','/v1/orgs','/v1/blueprints','/v1/passports','/v1/delegate','/v1/delegations','/v1/policies','/v1/authorize','/v1/execute','/v1/approvals','/v1/revoke','/v1/revoked','/v1/verify','/v1/audit']);
+  if (known.has(path)) return path;
+  if (/^\/v1\/(orgs|blueprints|passports|policies|approvals)\/[^/]+(?:\/.*)?$/.test(path)) return path.split('/').slice(0,3).join('/') + '/:id';
+  if (/^\/v1\/audit\//.test(path)) return '/v1/audit/:action';
+  return '/unknown';
+}
 function clientIp(req) {
   if (TRUST_PROXY && req.headers['x-forwarded-for']) return String(req.headers['x-forwarded-for']).split(',')[0].trim();
   return req.socket?.remoteAddress || 'unknown';
@@ -109,6 +116,7 @@ function errorStatus(e) {
   if (!code) {
     if (/unknown|not_found/.test(errCode)) code = 404;
     else if (/expired|revoked|suspended|quarantined|denied|insufficient|exceeded|replay|mismatch|invalid|malformed|unauthorized|forbidden|custody|locked/.test(errCode)) code = 403;
+    else if (/internal|kms_unconfigured|storage/.test(errCode)) code = 500;
     else code = 400;
   }
   return code;
@@ -378,8 +386,9 @@ async function main() {
         ip: clientIp(req),
         mem_delta_bytes: memUsed
       });
-      metrics.httpRequestDuration.observe({ method: req.method, route: p, status: code }, duration / 1000);
-      metrics.httpRequestsTotal.inc({ method: req.method, route: p, status: code });
+      const mr = metricRoute(p);
+      metrics.httpRequestDuration.observe({ method: req.method, route: mr, status: code }, duration / 1000);
+      metrics.httpRequestsTotal.inc({ method: req.method, route: mr, status: code });
     };
     const ok = async (code, obj) => {
       try {
