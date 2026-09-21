@@ -541,12 +541,50 @@ class PostgresStore {
 
   // ===== Revocations =====
   async addRevocation(r) {
-    const res = await this.pool.query(`
-      INSERT INTO revocations (org_id, type, id, kid, reason, cascade)
-      VALUES ($1,$2,$3,$4,$5,$6)
-      RETURNING seq
-    `, [r.org_id, r.type, r.id, r.kid, r.reason, JSON.stringify(r.cascade || [])]);
-    return res.rows[0].seq;
+    const client = await this.pool.connect();
+    const id = r.id || (String(r.type) + ':' + String(r.target));
+    try {
+      await client.query('BEGIN');
+      const existing = await client.query(
+        'SELECT data FROM authragen_records WHERE collection = $1 AND id = $2 FOR UPDATE',
+        ['revocations', id]
+      );
+      if (existing.rows[0]?.data) {
+        await client.query('COMMIT');
+        return existing.rows[0].data;
+      }
+      const inserted = await client.query(`
+        INSERT INTO revocations (org_id, type, id, kid, reason, cascade)
+        VALUES ($1,$2,$3,$4,$5,$6)
+        RETURNING seq
+      `, [r.org_id, r.type, r.target ?? r.id, r.kid, r.reason, JSON.stringify(r.cascade || [])]);
+      const rec = {
+        id,
+        seq: Number(inserted.rows[0].seq),
+        type: r.type,
+        target: r.target ?? r.id,
+        kid: r.kid || null,
+        org_id: r.org_id,
+        reason: r.reason || 'manual',
+        at: Date.now()
+      };
+      await client.query(
+        'INSERT INTO authragen_records (collection,id,org_id,data,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6)',
+        ['revocations', id, r.org_id, JSON.stringify(rec), new Date(rec.at), new Date(rec.at)]
+      );
+      await client.query('COMMIT');
+      return rec;
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getRevocationHead() {
+    const res = await this.pool.query('SELECT COALESCE(MAX(seq), 0) AS seq FROM revocations');
+    return Number(res.rows[0]?.seq || 0);
   }
 
   async getRevocations(filters = {}) {
