@@ -230,7 +230,7 @@ async function authorize({ intent, intent_sig, kid, token_id, context = {}, dry_
       const pol = policies.find(p => p.id === ev.policy_id);
       return Math.max(1, Number(pol?.condition?.min_approvals) || 1);
     })();
-    const ap = { id: 'apr_' + crypto.randomBytes(5).toString('hex'), org_id: ci.org_id, passport_id: ci.passport_id, token_jti: token_id || null, intent: ci, intent_hash: hash, aud: ci.aud, action: ci.action, resource: ci.resource, amount_cents: ci.amount_cents, destination: ci.destination, risk: risk.score, risk_version: riskCfg.version, policy_id: ev.policy_id, policy_hash: ev.policy_hash, policy_version: ev.policy_version, status: 'pending', quorum, approvals: [], created_at: Date.now(), expires_at: Date.now() + 15 * 60 * 1000, request_id: rid };
+    const ap = { id: 'apr_' + crypto.randomBytes(5).toString('hex'), org_id: ci.org_id, passport_id: ci.passport_id, token_jti: token_id || null, intent: ci, intent_hash: hash, aud: ci.aud, agent_kid: kid || pass.keys?.current?.kid || null, action: ci.action, resource: ci.resource, amount_cents: ci.amount_cents, destination: ci.destination, risk: risk.score, risk_version: riskCfg.version, policy_id: ev.policy_id, policy_hash: ev.policy_hash, policy_version: ev.policy_version, status: 'pending', quorum, approvals: [], created_at: Date.now(), expires_at: Date.now() + 15 * 60 * 1000, request_id: rid };
     getStore().put('approvals', ap);
     const rc = audit.append({ ...base, decision: 'step_up', risk: risk.score, risk_version: riskCfg.version, policy_id: ev.policy_id, policy_hash: ev.policy_hash, policy_version: ev.policy_version, reasons, approval_id: ap.id, request_id: rid });
     return { decision: 'step_up', approval_id: ap.id, quorum, risk: risk.score, risk_factors: risk.factors, policy_id: ev.policy_id, policy_hash: ev.policy_hash, policy_version: ev.policy_version, reasons, receipt: rc, request_id: rid };
@@ -745,7 +745,7 @@ async function main() {
           getStore().put('approvals', ap);
           let credential = null;
           if (ap.status === 'approved') {
-            const att = await buildActionToken({ orgSigner: getOrgSigner(ap.org_id), org_id: ap.org_id, sub: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, amount_cents: ap.amount_cents, requires_approval: true, token_jti: ap.token_jti, aud: ap.aud || 'authragen' });
+            const att = await buildActionToken({ orgSigner: getOrgSigner(ap.org_id), org_id: ap.org_id, sub: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, amount_cents: ap.amount_cents, requires_approval: true, token_jti: ap.token_jti, aud: ap.aud || 'authragen', kid: ap.agent_kid || null });
             ap.action_jti = att.jti; getStore().put('approvals', ap);
             ap.action_token = att.envelope;
             credential = await buildApproval({ orgSigner: getOrgSigner(ap.org_id), approval_id: ap.id, org_id: ap.org_id, passport_id: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, by: ap.decided_by, by_role: who.role, by_key_id: who.id, action_jti: att.jti, aud: ap.aud || 'authragen' });

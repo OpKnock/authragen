@@ -21,7 +21,10 @@ class PersistentMirrorStore {
   constructor(remote, backendType){ this.remote=remote; this.backendType=backendType; this.mem=Object.fromEntries(COLLECTIONS.map(c=>[c,Object.create(null)])); this.writeChain=Promise.resolve(); this.lastWriteError=null; }
   async init(){ if(this.remote.init) await this.remote.init(); else if(this.remote.connect) await this.remote.connect(); for(const col of COLLECTIONS){ const rows=this.remote.dumpCollection?await this.remote.dumpCollection(col):[]; for(const row of rows) if(row&&row.id) this.mem[col][row.id]=row; } return this; }
   _persist(task){
-    this.writeChain=this.writeChain.then(task).catch(err=>{
+    this.writeChain=this.writeChain.then(async()=>{
+      await task();
+      this.lastWriteError=null;
+    }).catch(err=>{
       this.lastWriteError=err;
       console.error('[store] persistent write failed:',err.message);
     });

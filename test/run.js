@@ -376,6 +376,21 @@ async function waitHealth(base, tries = 60) {
       await throwsAsync(() => me.execute(cd.action_token, ci), /key_revoked|unknown_kid|revoked|credential key is no longer valid/, 'issued action credential invalidated by key revocation');
     }
 
+    // Step-up action credentials retain the original agent kid and fail closed after that key is revoked.
+    {
+      const qk = admin.generateKeypair();
+      const qp = await admin.issuePassport(org_id, 'approval-key-' + Date.now().toString(36), { pubkey: qk.pub });
+      const qi = me.intent({ passport_id: qp.id, org_id, action: 'payments.charge', resource: 'stripe:approval-kid', amount_cents: 100 });
+      const qd = await me.authorize(qi, me.signIntent(qi, qk));
+      ok(qd.decision === 'step_up' && !!qd.approval_id, 'step-up fixture created for key binding');
+      const qapKey = await admin.mintKey(org_id, 'approver', 'kid-revoke-' + Date.now().toString(36));
+      const qapprover = new AuthraGen({ baseUrl: BASE, key: qapKey.credential || qapKey.key_id + '.' + qapKey.secret });
+      const qa = await qapprover.approve(qd.approval_id, true, 'kid binding regression');
+      ok(!!qa.action_token, 'step-up returns action credential');
+      await admin._call('/v1/passports/' + qp.id + '/keys/revoke', 'POST', { kid: qp.keys.current.kid, reason: 'step-up-post-issue-revocation' });
+      await throwsAsync(() => me.execute(qa.action_token, qi, { approval: qa.approval_credential }), /key_revoked|unknown_kid|revoked|credential key is no longer valid/, 'step-up action credential invalidated by agent key revocation');
+    }
+
     // --- lifecycle: suspend/quarantine reversible; revoke terminal + cascade ---
     {
       const lk = admin.generateKeypair();
