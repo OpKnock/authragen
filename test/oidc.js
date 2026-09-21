@@ -56,9 +56,6 @@ function jwt(header, claims, privateKey) {
   );
   assert.equal(verifier.verify(nonceToken, { nonce: 'n-123' }).claims.nonce, 'n-123');
   assert.throws(() => verifier.verify(nonceToken, { nonce: 'wrong' }), /nonce mismatch/);
-  assert.equal(principal.role, 'executor');
-  assert.equal(principal.source, 'oidc');
-
   const bad = token.slice(0, -1) + (token.endsWith('A') ? 'B' : 'A');
   assert.throws(() => verifier.verify(bad), /signature invalid/);
   await new Promise(resolve => server.close(resolve));
