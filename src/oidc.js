@@ -22,6 +22,7 @@ async function fetchJson(url, timeoutMs = 5000) {
   try {
     const r = await fetch(url, { signal: ctl.signal, headers: { accept: 'application/json' } });
     if (!r.ok) throw new Error('OIDC metadata fetch failed: ' + r.status);
+    if (process.env.NODE_ENV !== 'test' && new URL(r.url).protocol !== 'https:') throw new Error('OIDC metadata redirect downgraded to insecure HTTP');
     return await r.json();
   } finally { clearTimeout(timer); }
 }
