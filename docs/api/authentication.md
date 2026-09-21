@@ -9,14 +9,14 @@ ak_<key_id>.<secret>
 ```
 
 - `key_id`: 16-char identifier
-- `secret`: High-entropy secret (shown once)
+- `secret`: High-entropy secret (shown once; keep it in your secret manager)
 - Server stores: `scrypt(secret, N=16384, r=8, p=1)`
 
 ### Creation
 
 ```bash
 curl -X POST localhost:8787/v1/orgs/org_abc/keys \
-  -H "Authorization: Bearer ak_admin_..." \
+  -H "Authorization: Bearer ${AUTHRA_ADMIN_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"role": "executor", "expires_in": "12h", "description": "Payment service"}'
 ```
@@ -45,10 +45,10 @@ curl -X POST localhost:8787/v1/orgs/org_abc/keys \
 
 ```bash
 # Header (preferred)
-Authorization: Bearer ak_exec_abc123.sk_exec_xyz789
+Authorization: Bearer ${AUTHRA_EXECUTOR_KEY}
 
 # Query (legacy, rate-limited, not logged)
-GET /v1/verify?envelope=...&org_id=...&key=ak_exec_abc123.sk_exec_xyz789
+GET /v1/verify?envelope=...&org_id=...
 ```
 
 ### Rotation
@@ -92,8 +92,8 @@ For `/v1/authorize` with agent-signed intent:
 
 ```javascript
 // No API key needed - auth via intent signature
-const signed = me.signIntent(intent, agentKeypair);
-await me.authorize(signed);
+const signature = me.signIntent(intent, agentKeypair);
+await me.authorize(intent, signature);
 ```
 
 - Validates Ed25519 signature against passport
@@ -106,9 +106,9 @@ For trusted internal middleware:
 
 ```bash
 curl -X POST localhost:8787/v1/authorize \
-  -H "Authorization: Bearer sk_executor_..." \
+  -H "Authorization: Bearer ${AUTHRA_EXECUTOR_KEY}" \
   -H "Content-Type: application/json" \
-  -d '{ "intent": ..., "service_key": "sk_executor_..." }'
+  -d '{ "intent": ... }'
 ```
 
 - Uses executor+ API key for auth
@@ -124,16 +124,12 @@ Configure via `AUTHRA_CORS`:
 
 ## Security Headers
 
-All responses include:
+Dashboard responses include the following CSP header; JSON API responses expose the transport/security headers configured by the gateway. 
 ```
-Content-Security-Policy: default-src 'self'; script-src 'self'; object-src 'none'
-Strict-Transport-Security: max-age=31536000; includeSubDomains
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
-Referrer-Policy: strict-origin-when-cross-origin
-Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Resource-Policy: same-origin
+Referrer-Policy: no-referrer
 ```
 
 ## Trust Proxy
@@ -142,7 +138,7 @@ Behind load balancer/reverse proxy:
 ```bash
 AUTHRA_TRUST_PROXY=1
 ```
-- Reads `X-Forwarded-For`, `X-Forwarded-Proto`
-- Uses for rate limiting, logging, security decisions
+- Reads forwarded client IP/protocol headers only when explicitly enabled
+- Use only behind a trusted proxy; otherwise clients can spoof these headers
 
 ## Next: [Organizations](/api/organizations)

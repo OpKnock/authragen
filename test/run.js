@@ -53,6 +53,12 @@ async function waitHealth(base, tries = 60) {
     const h = await anon._call('/v1/health');
     ok(h.ok && h.v === 2, 'gateway v2 healthy', JSON.stringify(h).slice(0, 120));
     ok(!!h.request_id, 'health carries request_id');
+    // External KMS factories must receive options, not the file data directory positional argument.
+    {
+      const { createSigner } = require('../src/kms');
+      const aws = createSigner('aws', '/tmp/unused', { region: 'eu-west-1', orgKeyId: 'org-key', checkpointKeyId: 'checkpoint-key' });
+      ok(aws.region === 'eu-west-1' && aws.orgKeyId === 'org-key', 'KMS factory passes external backend options correctly');
+    }
 
     // --- security headers + CORS + request IDs ---
     {
@@ -347,6 +353,16 @@ async function waitHealth(base, tries = 60) {
       const ir = me.intent({ passport_id: rp.id, org_id, action: 'data.read', resource: 'r:1' });
       const dr = await me.authorize(ir, me.signIntent(ir, nk)).catch(e => e.body || {});
       ok(dr.decision === 'deny' || dr.error, 'revoked key fails closed');
+    }
+
+    // Already-issued action credentials must become unusable when their passport key is revoked.
+    // Key revocation updates the signed passport document as well as the revocation feed.
+    {
+      const sk = admin.generateKeypair();
+      const sp = await admin.issuePassport(org_id, 'signed-key-revoke-' + Date.now().toString(36), { pubkey: sk.pub });
+      const beforeSig = sp.signature;
+      const revoked = await admin._call(`/v1/passports/${sp.id}/keys/revoke`, 'POST', { kid: sp.keys.current.kid, reason: 'signature-regression' });
+      ok(revoked.signature && revoked.signature !== beforeSig, 'key revocation re-signs passport lifecycle document');
     }
 
     // Already-issued action credentials must become unusable when their passport key is revoked.

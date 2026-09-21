@@ -597,7 +597,7 @@ async function main() {
           if (!cur) throw Object.assign(new Error('unknown passport'), { code: 'passport_unknown' });
           auth.requireRole(callerKey(req), cur.org_id, 'admin');
           if (!b.kid) throw Object.assign(new Error('kid required'), { code: 'bad_request' });
-          const pass = revokeKey(id, b.kid);
+          const pass = await revokeKey(id, b.kid);
           addRevocation({ type: 'key', target: id, kid: b.kid, org_id: pass.org_id, reason: b.reason });
           return ok(200, pass);
         } catch (e) { return fail(e); }
@@ -783,9 +783,9 @@ async function main() {
           else if (b.type === 'org') targetOrg = getStore().get('orgs', b.id)?.id;
           if (!targetOrg) throw Object.assign(new Error('unknown target'), { code: 'bad_request' });
           auth.requireRole(callerKey(req), targetOrg, 'admin');
-          if (b.type === 'passport') { try { setPassportStatus(b.id, 'revoked'); } catch { const ps = getStore().get('passports', b.id); if (ps) { ps.revoked = true; ps.status = 'revoked'; getStore().put('passports', ps); } } }
+          if (b.type === 'passport') { await setPassportStatus(b.id, 'revoked'); }
           if (b.type === 'apikey') { const ak = getStore().get('apikeys', b.id); if (ak) { ak.revoked = true; getStore().put('apikeys', ak); } }
-          if (b.type === 'key') { try { revokeKey(b.id, b.kid); } catch (e) { throw e; } }
+          if (b.type === 'key') { await revokeKey(b.id, b.kid); }
           if (b.type === 'blueprint') { const bp = getStore().get('blueprints', b.id); if (bp) { bp.status = 'revoked'; getStore().put('blueprints', bp); } }
           if (b.type === 'org') { const o = getStore().get('orgs', b.id); if (o) { o.locked = true; o.locked_at = Date.now(); getStore().put('orgs', o); } }
           const rec = addRevocation({ type: b.type, target: b.id, kid: b.kid || null, org_id: targetOrg, reason: b.reason });

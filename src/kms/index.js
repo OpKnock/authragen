@@ -9,12 +9,15 @@ const KMS_BACKENDS = {
 };
 
 function createSigner(type, dataDir, opts = {}) {
-  const backend = KMS_BACKENDS[type?.toLowerCase()];
+  const normalized = type?.toLowerCase();
+  const backend = KMS_BACKENDS[normalized];
   if (!backend) {
     throw new Error(`Unknown KMS backend: ${type}. Available: ${Object.keys(KMS_BACKENDS).join(', ')}`);
   }
   const SignerClass = backend();
-  const signer = new SignerClass(dataDir, opts);
+  const signer = normalized === 'file'
+    ? new SignerClass(dataDir, opts)
+    : new SignerClass(opts);
   return signer;
 }
 

@@ -180,22 +180,23 @@ async function rotatePassport(passport_id, new_pubkey) {
   if(privOnce)out._privOnce=privOnce;
   return out;
 }
-function revokeKey(passport_id, kid) {
+async function revokeKey(passport_id, kid) {
   const pass = _store().get('passports', passport_id);
   if (!pass) throw code('passport_unknown', 'Unknown passport');
-  const history = pass.keys.history || [];
+  const history = pass.keys?.history || [];
   const idx = history.findIndex(k => k.kid === kid);
   if (idx >= 0) {
     history[idx] = { ...history[idx], revoked: true, until: Date.now() };
-    _store().put('passports', pass);
-    return pass;
-  }
-  if (pass.keys.current?.kid === kid) {
+  } else if (pass.keys?.current?.kid === kid) {
     pass.keys.current = { ...pass.keys.current, revoked: true };
-    _store().put('passports', pass);
-    return pass;
+  } else {
+    throw code('bad_request', 'kid not found');
   }
-  throw code('bad_request', 'kid not found');
+  pass.updated_at = Date.now();
+  const signer = getOrgSigner(pass.org_id);
+  pass.signature = await signer.signCanonical({ ...pass, signature: undefined });
+  _store().put('passports', pass);
+  return pass;
 }
 async function setPassportStatus(id, status) {
   if (!LIFECYCLE.includes(status)) throw code('bad_request', 'invalid status');
