@@ -9,10 +9,12 @@ import urllib.error
 import urllib.request
 
 try:
-    from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+        Ed25519PrivateKey,
+        Ed25519PublicKey,
+    )
     _HAS_ED = True
 except ImportError:
     _HAS_ED = False
