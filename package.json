@@ -1,6 +1,6 @@
 {
   "name": "authragen",
-  "version": "2.1.0",
+  "version": "2.2.1",
   "description": "AuthraGen — vendor-neutral Agent Passport trust layer (exact-authority identity for agents)",
   "license": "Apache-2.0",
   "main": "sdk-js/authragen.js",
@@ -28,10 +28,11 @@
     "security:deps": "npx depcheck",
     "bench": "node test/bench.js",
     "docs:dev": "npx vitepress dev docs",
-    "docs:build": "npx vitepress build docs",
-    "prepare": "husky install"
+    "docs:build": "npx vitepress build docs"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.400.0",
     "@azure/identity": "^4.0.0",
@@ -43,7 +44,6 @@
   },
   "devDependencies": {
     "eslint": "^9.0.0",
-    "husky": "^9.0.0",
     "vitepress": "^1.0.0"
   },
   "publishConfig": {
