@@ -80,7 +80,7 @@ class RedisStore {
         end
 
         return {1, 'ok', current}
-`
+      `
     };
   }
 
