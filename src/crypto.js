@@ -123,6 +123,17 @@ function pubKeyFromB64u(x) {
   const jwk = { kty: 'OKP', crv: 'Ed25519', x };
   return crypto.createPublicKey({ key: jwk, format: 'jwk' });
 }
+function pubKeyFromWire(value, alg = 'EdDSA') {
+  if (alg === 'EdDSA') return pubKeyFromB64u(value);
+  if (alg === 'ES256') return crypto.createPublicKey({ key: Buffer.from(String(value), 'base64url'), format: 'der', type: 'spki' });
+  throw err('token_malformed', 'unsupported credential algorithm');
+}
+function verifyBytes(data, signatureB64u, pubKey, alg = 'EdDSA') {
+  const sig = b64uDecode(signatureB64u);
+  if (alg === 'EdDSA') return crypto.verify(null, Buffer.from(data), pubKey, sig);
+  if (alg === 'ES256') return crypto.verify('sha256', Buffer.from(data), pubKey, sig);
+  throw err('token_malformed', 'unsupported credential algorithm');
+}
 function privKeyFromB64u(x, d) {
   const jwk = { kty: 'OKP', crv: 'Ed25519', x, d };
   return crypto.createPrivateKey({ key: jwk, format: 'jwk' });
@@ -157,4 +168,4 @@ function open(token, pubKey) {
 function err(code, message) { const e = new Error(message); e.code = code; return e; }
 function didFor(pubB64u) { return 'did:authragen:' + String(pubB64u).slice(0, 16); }
 
-module.exports = { b64uEncode, b64uDecode, b64uJsonEncode, b64uJsonDecode, canonical, hasDuplicateKeys, sha256hex, rid, generateEd25519, pubKeyFromB64u, privKeyFromB64u, signCanonical, verifyCanonical, seal, open, didFor };
+module.exports = { b64uEncode, b64uDecode, b64uJsonEncode, b64uJsonDecode, canonical, hasDuplicateKeys, sha256hex, rid, generateEd25519, pubKeyFromB64u, pubKeyFromWire, verifyBytes, privKeyFromB64u, signCanonical, verifyCanonical, seal, open, didFor };
