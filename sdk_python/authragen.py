@@ -3,8 +3,10 @@ service-key read/approve paths work without it). Stdlib + cryptography only."""
 import base64
 import hashlib
 import json
+import math
 import secrets
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 
@@ -23,12 +25,41 @@ def _b64u_encode(b: bytes) -> str:
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
 def _b64u_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+def _json_string(value):
+    return json.dumps(
+        unicodedata.normalize("NFC", value),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
 def _canonical(o):
     if isinstance(o, dict):
-        return "{" + ",".join(json.dumps(k) + ":" + _canonical(o[k]) for k in sorted(o) if k != "signature") + "}"
+        items = []
+        for raw_key, value in o.items():
+            key = unicodedata.normalize("NFC", str(raw_key))
+            if key == "signature":
+                continue
+            items.append((key, value))
+        items.sort(key=lambda item: item[0].encode("utf-16-be"))
+        return "{" + ",".join(_json_string(k) + ":" + _canonical(v) for k, v in items) + "}"
     if isinstance(o, list):
         return "[" + ",".join(_canonical(x) for x in o) + "]"
-    return json.dumps(o, separators=(",", ":"))
+    if isinstance(o, str):
+        return _json_string(o)
+    if isinstance(o, bool) or o is None:
+        return json.dumps(o, separators=(",", ":"))
+    if isinstance(o, int):
+        if abs(o) > 9007199254740991:
+            raise ValueError("integer outside JavaScript safe range")
+        return str(o)
+    if isinstance(o, float):
+        if not math.isfinite(o):
+            raise ValueError("non-finite number not allowed in canonical form")
+        if o == 0 or o.is_integer():
+            return str(int(o))
+        return json.dumps(o, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    return json.dumps(o, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
 class Blocked(Exception):
     def __init__(self, decision):
@@ -157,6 +188,8 @@ class AuthraGen:
             payload = json.loads(_b64u_decode(p).decode())
             out["payload"] = payload
             if not all(payload.get(f) is not None for f in ("jti", "issuer", "aud", "iat", "exp")):
+                out["error"] = "token_malformed"; return out
+            if payload.get("v") not in (1, 2) or payload.get("kind") not in ("action", "approval"):
                 out["error"] = "token_malformed"; return out
             if payload.get("issuer") != "authragen-gateway":
                 out["error"] = "issuer_mismatch"; return out
