@@ -46,7 +46,7 @@ function redact(entry) {
   }
   // Action tokens are single-use bearer-adjacent credentials: store only the jti + hash, never the envelope.
   if (typeof out.action_token === 'string' && out.action_token.startsWith('AR1.')) {
-    out.action_token = '[envelope-redacted:' + String(out.action_token).slice(-12) + ']';
+    out.action_token = '[envelope-redacted]';
   }
   if (typeof out.approval === 'string' && out.approval.startsWith('AR1.')) out.approval = '[envelope-redacted]';
   return out;
