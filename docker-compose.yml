@@ -18,12 +18,15 @@ services:
       - AUTHRA_BODY_LIMIT=262144
       - AUTHRA_SESSION_TTL_MS=43200000
       - AUTHRA_INTENT_TTL_S=120
-      - AUTHRA_ACTION_TTL_S=300
-      - AUTHRA_APPROVAL_TTL_S=3600
+      - AUTHRA_ACTION_TTL_S=120
+      - AUTHRA_APPROVAL_TTL_S=900
       - AUTHRA_CLOCK_SKEW_S=30
       - AUTHRA_RATE_LIMIT_WINDOW_MS=60000
-      - AUTHRA_RATE_LIMIT_MAX=100
       - AUTHRA_RISK_CEILING=80
+      - AUTHRA_KMS=${AUTHRA_KMS:?Set AUTHRA_KMS=aws|gcp|vault|azure for production}
+      - AUTHRA_STORE=${AUTHRA_STORE:?Set AUTHRA_STORE=postgres or redis for production}
+      - DATABASE_URL=${DATABASE_URL:-}
+      - REDIS_URL=${REDIS_URL:-}
     volumes:
       - authragen_data:/app/data
     healthcheck:
