@@ -8,7 +8,7 @@ http://localhost:8787/v1
 
 ## Authentication
 
-All management endpoints require `Authorization: Bearer <api_key>`.
+Management endpoints accept `Authorization: Bearer <api_key>` plus configured federated OIDC JWT or SPIFFE JWT-SVID identities.
 
 ```bash
 curl -H "Authorization: Bearer ${AUTHRA_API_KEY}" ...
@@ -17,6 +17,8 @@ curl -H "Authorization: Bearer ${AUTHRA_API_KEY}" ...
 **API Key format:** `ak_<key_id>.<secret>` (secret shown once at creation)
 
 **Roles:** `admin` > `approver` > `executor` > `reporter`
+
+See [Federation](/api/federation) for OIDC and SPIFFE/SPIRE identity configuration, and for ML-DSA post-quantum credentials.
 
 ## Request/Response Format
 
