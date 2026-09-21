@@ -39,7 +39,7 @@ function boundedIntEnv(name, fallback, min, max) {
   return Number.isSafeInteger(n) && n >= min && n <= max ? n : fallback;
 }
 const RISK_CEILING_DEFAULT = boundedIntEnv('AUTHRA_RISK_CEILING', 85, 1, 100);
-const RISK_STEPUP_DEFAULT = boundedIntEnv('AUTHRA_RISK_STEPUP', 0 < 30 ? 30 : 30, 0, 99);
+const RISK_STEPUP_DEFAULT = Math.min(boundedIntEnv('AUTHRA_RISK_STEPUP', 30, 0, 99), RISK_CEILING_DEFAULT - 1);
 const KMS_TYPE = (process.env.AUTHRA_KMS || 'file').toLowerCase();
 const STORE_TYPE = (process.env.AUTHRA_STORE || 'file').toLowerCase();
 const ALLOW_INSECURE_PROD_DEFAULTS = process.env.AUTHRA_ALLOW_INSECURE_PROD_DEFAULTS === '1';
