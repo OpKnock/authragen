@@ -49,6 +49,20 @@ class RedisStore {
         end
         return {1, newVal}
       `,
+      addRevocation: `
+        local recordKey = KEYS[1]
+        local seqKey = KEYS[2]
+        local existing = redis.call('GET', recordKey)
+        if existing then
+          return existing
+        end
+        local seq = redis.call('INCR', seqKey)
+        local record = cjson.decode(ARGV[1])
+        record['seq'] = seq
+        local encoded = cjson.encode(record)
+        redis.call('SET', recordKey, encoded)
+        return encoded
+      `,
       checkAndDebit: `
         local nonceKey = KEYS[1]
         local jtiKey = KEYS[2]
@@ -157,6 +171,22 @@ class RedisStore {
   }
 
   // ===== Atomic check-and-debit (nonce + jti + budget) =====
+  async addRevocation(r) {
+    await this.connect();
+    const id = r.id || (String(r.type) + ':' + String(r.target));
+    const record = { ...r, id, target: r.target ?? r.id, kid: r.kid || null, reason: r.reason || 'manual', at: r.at || Date.now() };
+    const result = await this.redis.eval(
+      this.luaScripts.addRevocation, 2,
+      `revocations:${id}`, 'revocation:seq', JSON.stringify(record)
+    );
+    return JSON.parse(result);
+  }
+
+  async getRevocationHead() {
+    await this.connect();
+    return Number(await this.redis.get('revocation:seq') || 0);
+  }
+
   async getTokenSpend(tokenId) {
     await this.connect();
     return Number(await this.redis.get(`token-spend:${tokenId}`) || 0);
