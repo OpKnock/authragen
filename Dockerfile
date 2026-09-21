@@ -16,7 +16,7 @@ COPY sdk_python/ ./sdk_python/
 RUN npm ci --omit=dev && npm cache clean --force
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 
 # Security: non-root user
 RUN addgroup -g 1000 -S authragen && \
