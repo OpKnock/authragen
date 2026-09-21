@@ -695,6 +695,11 @@ class PostgresStore {
     return res.rows.length > 0;
   }
 
+  async getTokenSpend(tokenId) {
+    const res = await this.pool.query('SELECT spent_cents FROM token_spends WHERE token_id = $1', [tokenId]);
+    return Number(res.rows[0]?.spent_cents || 0);
+  }
+
   // ===== Atomic execute reservation =====
   async checkAndDebitExecution(orgId, nonce, actionJti, tokenId, amountCents, limitCents) {
     const amount = Number(amountCents) || 0;
