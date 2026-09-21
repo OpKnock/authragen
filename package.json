@@ -31,19 +31,19 @@
     "docs:build": "npx vitepress build docs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.13.0"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.400.0",
     "@azure/identity": "^4.0.0",
     "@azure/keyvault-keys": "^4.8.0",
-    "@google-cloud/kms": "^3.5.0",
+    "@google-cloud/kms": "^6.1.0",
     "ioredis": "^5.3.0",
     "pg": "^8.11.0",
     "prom-client": "^15.1.0"
   },
   "devDependencies": {
-    "eslint": "^9.0.0",
+    "eslint": "^10.11.0",
     "vitepress": "^1.0.0"
   },
   "publishConfig": {
