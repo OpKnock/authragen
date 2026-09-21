@@ -742,14 +742,15 @@ async function main() {
           ap.decided_by_role = who.role; ap.decided_at = Date.now();
           getStore().put('approvals', ap);
           let credential = null;
+          let actionTokenEnvelope = null;
           if (ap.status === 'approved') {
             const att = await buildActionToken({ orgSigner: getOrgSigner(ap.org_id), org_id: ap.org_id, sub: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, amount_cents: ap.amount_cents, requires_approval: true, token_jti: ap.token_jti, aud: ap.aud || 'authragen', kid: ap.agent_kid || null });
-            ap.action_jti = att.jti; getStore().put('approvals', ap);
+            ap.action_jti = att.jti; actionTokenEnvelope = att.envelope; getStore().put('approvals', ap);
             credential = await buildApproval({ orgSigner: getOrgSigner(ap.org_id), approval_id: ap.id, org_id: ap.org_id, passport_id: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, by: ap.decided_by, by_role: who.role, by_key_id: who.id, action_jti: att.jti, aud: ap.aud || 'authragen' });
             ap.approval_jti = credential.payload.jti || ap.id; getStore().put('approvals', ap);
           }
           const rc = audit.append({ org_id: ap.org_id, actor: ap.passport_id, action: ap.action, resource: ap.resource, decision: ap.status, risk: ap.risk, policy_id: ap.policy_id, policy_hash: ap.policy_hash, reasons: [`approval:${id}:${ap.status}`, `by:${ap.decided_by}/${who.role}`, `quorum:${need}`], intent_hash: ap.intent_hash, request_id: req._rid });
-          return ok(200, { ...ap, approval_credential: credential?.envelope || null, receipt: rc, request_id: req._rid });
+          return ok(200, { ...publicApproval(ap), action_token: actionTokenEnvelope, approval_credential: credential?.envelope || null, receipt: rc, request_id: req._rid });
         } catch (e) { return fail(e); }
       }
       if (p === '/v1/approvals' && req.method === 'GET') {
