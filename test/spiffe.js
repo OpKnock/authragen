@@ -43,5 +43,22 @@ function b64u(x) { return Buffer.from(x).toString('base64url'); }
   assert.equal(out.valid, true);
   assert.equal(out.spiffe_id, 'spiffe://example.org/ns/default/sa/authragen');
 
+  const http2 = require('node:http2');
+  const sock = path.join(dir, 'workload.sock');
+  const h2 = http2.createServer();
+  const encVarint = n => { const out=[]; let v=BigInt(n); while(v>127n){out.push(Number((v&127n)|128n));v>>=7n;} out.push(Number(v)); return Buffer.from(out); };
+  const field = (n, value) => { const b=Buffer.isBuffer(value)?value:Buffer.from(value,'utf8'); return Buffer.concat([encVarint((n<<3)|2),encVarint(b.length),b]); };
+  h2.on('stream', (stream, headers) => {
+    stream.respond({ ':status': 200, 'content-type':'application/grpc' });
+    const inner=Buffer.concat([field(1,'spiffe://example.org/ns/default/sa/authragen'),field(2,'jwt-svid-test')]);
+    const payload=field(1,inner); const frame=Buffer.concat([Buffer.from([0]),Buffer.from([0,0,0,payload.length]),payload]);
+    stream.end(frame);
+  });
+  await new Promise(resolve=>h2.listen(sock,resolve));
+  const { fetchJwtSvidFromWorkloadApi } = require('../adapters/spiffe');
+  const svids = await fetchJwtSvidFromWorkloadApi({ socketPath:sock, audience:'authragen' });
+  assert.equal(svids[0].spiffe_id,'spiffe://example.org/ns/default/sa/authragen');
+  assert.equal(svids[0].svid,'jwt-svid-test');
+  h2.close();
   console.log('SPIFFE X.509-SVID + JWT-SVID validation: PASS');
 })().catch(err => { console.error(err); process.exit(1); });
