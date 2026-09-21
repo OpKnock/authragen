@@ -26,7 +26,7 @@ agent = AuthraGen(base_url='http://localhost:8787')
 
 ```python
 kp = admin.generate_keypair()
-# {'pub': 'base64url...', 'priv': 'base64url...'}
+# {'pub': 'base64url...', 'd': 'base64url...'}
 ```
 
 ### `create_agent(org_id, name, **options)`
@@ -67,14 +67,14 @@ intent = agent.create_intent(
 ### `sign_intent(intent, keypair)`
 
 ```python
-signed = agent.sign_intent(intent, agent_keypair)
-# {'intent': ..., 'signature': 'base64url...', 'kid': 'kid_1', 'alg': 'EdDSA'}
+signature = agent.sign_intent(intent, agent_keypair)
+# base64url Ed25519 signature string
 ```
 
 ### `authorize(signed_intent, **options)`
 
 ```python
-decision = agent.authorize(signed_intent)
+decision = agent.authorize(intent, signature)
 # or dry-run:
 preview = agent.authorize(signed_intent, dry_run=True)
 ```
@@ -112,7 +112,7 @@ admin.register_delegation(signed)
 ### `approve(approval_id, decision)`
 
 ```python
-result = admin.approve('apr_abc123', approve=True, reason='Authorized')
+result = admin.approve('apr_abc123', approve=True, by_='Authorized')
 ```
 
 ### `revoke(**params)`
@@ -176,19 +176,7 @@ except Exception as e:
 
 ## Async Support
 
-```python
-import asyncio
-from authragen import AsyncAuthraGen
-
-async def main():
-    agent = AsyncAuthraGen(base_url='http://localhost:8787')
-    intent = agent.create_intent(...)
-    signed = agent.sign_intent(intent, keypair)
-    decision = await agent.authorize(signed)
-    receipt = await agent.execute(decision.action_token, intent)
-
-asyncio.run(main())
-```
+The current Python SDK is synchronous and does not ship an `AsyncAuthraGen` client.
 
 ## Type Hints
 

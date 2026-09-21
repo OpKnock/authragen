@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 22.13+
 - Docker (optional, for containerized deployment)
 
 ## 1. Run Locally
@@ -17,7 +17,7 @@ node src/server.js
 First boot prints a one-time bootstrap token:
 
 ```
-AuthraGen v2.1.0 listening on http://localhost:8787
+AuthraGen gateway v2 on http://localhost:8787
 Bootstrap token: AUTHRA_BOOTSTRAP=bt_abc123...
 ```
 
@@ -90,12 +90,15 @@ npm run demo
 npm run demo:python
 ```
 
-## Docker (Production)
+## Docker
+
+For local development:
 
 ```bash
-docker-compose up -d
-# Service at http://localhost:8787
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
+
+For production, configure a real KMS and durable storage before exposing the gateway. The file-backed KMS is intended for development/testing only.
 
 ## Environment Variables
 

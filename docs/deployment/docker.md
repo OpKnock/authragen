@@ -1,5 +1,7 @@
 # Deployment
 
+AuthraGen requires Node.js 22.13+ at runtime. The file-backed key store is for development/testing; production should use a real KMS and durable storage.
+
 ## Docker (Recommended)
 
 ### Production
@@ -189,6 +191,8 @@ spec:
 ```
 
 ## Production Checklist
+
+> The current control-plane mirror keeps authoritative reads in process memory. Run one gateway instance per state store unless you add an external cross-instance coordination layer.
 
 - [ ] **HTTPS/TLS** - Terminate at ingress/load balancer, `AUTHRA_TRUST_PROXY=1`
 - [ ] **CORS** - `AUTHRA_CORS` set to exact origins (not `*`)

@@ -34,8 +34,6 @@ curl -H "Authorization: Bearer ak_abc123.secret" ...
 | `POST /v1/verify` | 60 | 1 min |
 | Default | 100 | 1 min |
 
-Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
-
 ## Endpoints
 
 ### Organizations
@@ -56,7 +54,6 @@ Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
 | POST | `/orgs/:id/keys` | admin | Create API key |
 | POST | `/orgs/:id/keys/rotate` | admin | Rotate API key |
 | GET | `/orgs/:id/keys` | admin | List API keys |
-| DELETE | `/orgs/:id/keys/:key_id` | admin | Revoke API key |
 
 ### Blueprints
 
@@ -65,8 +62,6 @@ Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
 | POST | `/blueprints` | admin | Create blueprint |
 | GET | `/blueprints` | reporter+ | List blueprints |
 | GET | `/blueprints/:id` | reporter+ | Get blueprint |
-| PUT | `/blueprints/:id` | admin | Update blueprint |
-| DELETE | `/blueprints/:id` | admin | Delete blueprint |
 
 ### Passports
 
@@ -85,8 +80,6 @@ Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
 |--------|------|------|-------------|
 | POST | `/delegate` | executor+ | Register delegation |
 | GET | `/delegations` | reporter+ | List delegations |
-| GET | `/delegations/:jti` | reporter+ | Get delegation |
-| GET | `/delegations/chain/:passport_id` | reporter+ | Get delegation chain |
 
 ### Policies
 

@@ -33,7 +33,7 @@ Generates Ed25519 keypair locally (keys never leave process).
 
 ```javascript
 const kp = admin.generateKeypair();
-// { pub: 'base64url...', priv: 'base64url...' }
+// { pub: 'base64url...', x: 'base64url...', d: 'base64url...' }
 ```
 
 ### `createAgent(orgId, name, options)`
@@ -76,14 +76,14 @@ const intent = agent.createIntent({
 ### `signIntent(intent, keypair)`
 
 ```javascript
-const signed = agent.signIntent(intent, agentKeypair);
-// { intent, signature: 'base64url...', kid: 'kid_1', alg: 'EdDSA' }
+const signature = agent.signIntent(intent, agentKeypair);
+// returns the base64url Ed25519 signature string
 ```
 
-### `authorize(signedIntent, options?)`
+### `authorize(intent, intentSig, options?)`
 
 ```javascript
-const decision = await agent.authorize(signedIntent);
+const decision = await agent.authorize(intent, signature);
 // or with dry-run:
 const preview = await agent.authorize(signedIntent, { dry_run: true });
 
@@ -152,10 +152,7 @@ await agent.registerDelegation(signed);
 ### `approve(approvalId, decision)`
 
 ```javascript
-const result = await admin.approve('apr_abc123', {
-  approve: true,
-  reason: 'Authorized by finance lead'
-});
+const result = await admin.approve('apr_abc123', true, 'Authorized by finance lead');
 
 // If quorum met:
 {
@@ -168,12 +165,8 @@ const result = await admin.approve('apr_abc123', {
 ### `revoke(params)`
 
 ```javascript
-await admin.revoke({
-  type: 'passport',  // 'org' | 'blueprint' | 'passport' | 'key' | 'token' | 'action' | 'apikey'
-  id: 'agt_abc',
-  reason: 'Decommissioned',
-  kid: 'kid_2'       // required for type === 'key'
-});
+await admin.revoke('passport', 'agt_abc', 'Decommissioned');
+// key revocation: await admin.revoke('key', 'agt_abc', 'Compromised', { kid: 'kid_2' })
 ```
 
 ### `verifyOffline(envelope, orgPubkey)`
@@ -183,7 +176,7 @@ await admin.revoke({
 ```javascript
 const result = AuthraGen.verifyOffline(envelope, orgPubkey);
 // or instance method:
-const result = await agent.verifyOffline(envelope, orgPubkey);
+const result = await agent.verifyOffline(envelope, orgId);
 
 // Response:
 {

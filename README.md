@@ -69,23 +69,24 @@ Preferred flow: `createAgent() → createIntent() → signIntent() → authorize
 
 ## What AuthraGen is / is not
 
-**Prototype capabilities (this repo, working today):**
+**Current capabilities (implemented in this repository):**
 self-custody passports, blueprints, narrowing delegation, exact-intent authorize/execute,
 single-use aud-bound credentials, RBAC management APIs, policy engine (deny-wins,
 empty-means-nothing), deterministic risk triage, quorum approvals, revocation cascade +
 versioned feed, hash-chained receipts + signed checkpoints, offline verifier, MCP/A2A/n8n
 adapters, JS + Python SDKs, control-plane dashboard.
 
-**Production recommendations:**
-Postgres for storage (transactions for budget/token/approval/revocation/rotation/audit-seq),
-Redis (SET NX EX) for distributed replay atomicity, real KMS/HSM via `AUTHRA_KMS`,
-`AUTHRA_ANCHOR_URL` to a transparency log/timestamp service, HTTPS behind a proxy
-(`AUTHRA_TRUST_PROXY=1`), configured `AUTHRA_CORS`, tightened `AUTHRA_BODY_LIMIT`,
-per-org quotas + rate limits, fresh revocation-feed polling for offline verifiers.
+**Production deployment requirements:**
+Use a real KMS/HSM via `AUTHRA_KMS` and a durable Postgres/Redis backend. The gateway waits
+for persistent-store writes before returning successful responses. The current in-memory
+mirror keeps authoritative reads instance-local, so run one gateway instance per state store
+unless you add an external cross-instance coordination layer. Use HTTPS behind a trusted
+proxy (`AUTHRA_TRUST_PROXY=1`), exact `AUTHRA_CORS` origins, bounded request bodies, tuned
+rate limits and fresh revocation-feed polling for offline verifiers.
 
-**Roadmap (optional, not claimed as done):**
-Postgres/Redis adapters, KMS backends (AWS/GCP/Vault/Azure), Sigstore/Rekor anchoring preset,
-OIDC federation (bind `did:authragen` to Entra/Okta/Google), formal interop certification suite.
+**Roadmap:**
+OIDC federation, richer external transparency-log integrations, formal interoperability
+certification, and cross-instance state synchronization are future work.
 
 **Non-goals:**
 No fake global registry claiming authority over all AI agents. Identity alone is not the
@@ -181,7 +182,7 @@ AuthraGen/
   sdk-js/authragen.js        sdk_python/authragen.py
   adapters/ openai.js anthropic.js gemini.js mcp.js a2a.js n8n.js
   examples/ demo.js python_demo.py
-  test/ run.js               # 104 assertions, clean temp-dir harness
+  test/ run.js               # adversarial end-to-end gateway harness, clean temp-dir state
 ```
 
 ## Interoperability
