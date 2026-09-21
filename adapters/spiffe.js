@@ -59,10 +59,12 @@ function verifyJwtSignature(token, jwks, now = Math.floor(Date.now()/1000)) {
   if (typeof claims.sub !== 'string' || !claims.sub.startsWith('spiffe://')) throw new Error('SPIFFE JWT-SVID subject is not a SPIFFE ID');
   const trustDomain = new URL(claims.sub).host;
   if (claims.iss !== trustDomain && claims.iss !== 'spiffe://' + trustDomain) throw new Error('SPIFFE JWT-SVID issuer must match its trust domain');
-  if (claims.exp != null && now > claims.exp) throw new Error('SPIFFE JWT-SVID expired');
+  if (!Number.isInteger(claims.exp)) throw new Error('SPIFFE JWT-SVID missing exp');
+  if (now > claims.exp) throw new Error('SPIFFE JWT-SVID expired');
   if (claims.nbf != null && now < claims.nbf) throw new Error('SPIFFE JWT-SVID not yet valid');
   if (!claims.iat || !Number.isInteger(claims.iat)) throw new Error('SPIFFE JWT-SVID missing iat');
-  if (typeof claims.aud === 'undefined') throw new Error('SPIFFE JWT-SVID missing audience');
+  const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!audiences.length || audiences.some(x => typeof x !== 'string' || !x)) throw new Error('SPIFFE JWT-SVID missing audience');
   return { header, claims, spiffe_id: claims.sub, trust_domain: new URL(claims.sub).host };
 }
 function audienceMatches(aud, expected) {
