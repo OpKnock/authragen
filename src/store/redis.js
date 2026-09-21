@@ -256,6 +256,11 @@ class RedisStore {
     const values = await this.redis.mget(keys);
     return values.filter(v => v).map(v => JSON.parse(v));
   }
+  async dumpCollection(collection){ return this.all(collection); }
+  async getRecord(collection,id){ await this.connect(); const v=await this.redis.get(collection+':'+id); return v?JSON.parse(v):null; }
+  async setRecord(collection,obj){ await this.connect(); await this.redis.set(collection+':'+obj.id,JSON.stringify(obj)); }
+  async deleteRecord(collection,id){ await this.connect(); await this.redis.del(collection+':'+id); }
+
 
   async has(col, id) {
     return await this.redis.exists(`${col}:${id}`) === 1;
