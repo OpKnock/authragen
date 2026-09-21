@@ -11,7 +11,7 @@ http://localhost:8787/v1
 All management endpoints require `Authorization: Bearer <api_key>`.
 
 ```bash
-curl -H "Authorization: Bearer ak_abc123.secret" ...
+curl -H "Authorization: Bearer ${AUTHRA_API_KEY}" ...
 ```
 
 **API Key format:** `ak_<key_id>.<secret>` (secret shown once at creation)
