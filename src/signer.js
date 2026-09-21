@@ -22,6 +22,7 @@ function restrict(p) {
 
 // Base class for KMS signers
 class Signer {
+  getAlgorithm() { throw new Error('Not implemented'); }
   async init() { throw new Error('Not implemented'); }
   getOrgPublicKey() { throw new Error('Not implemented'); }
   getCheckpointPublicKey() { throw new Error('Not implemented'); }
@@ -62,7 +63,10 @@ function gatewaySigner() {
   }
   return {
     pubkey: _gatewaySigner.getCheckpointPublicKey ? _gatewaySigner.getCheckpointPublicKey() : null,
-    signCanonical: async (obj) => _gatewaySigner.signCheckpoint(JSON.stringify(obj))
+    alg: _gatewaySigner.getAlgorithm ? _gatewaySigner.getAlgorithm() : (_gatewaySigner.algorithm || 'EdDSA'),
+    signCanonical: async (obj) => _gatewaySigner.signCanonical
+      ? _gatewaySigner.signCanonical(obj)
+      : _gatewaySigner.signCheckpoint(canonical(obj))
   };
 }
 
