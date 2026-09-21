@@ -107,12 +107,31 @@ class RedisStore {
       this.consumeActionJTISha = await this.redis.script('LOAD', this.luaScripts.consumeActionJTI);
       this.debitBudgetSha = await this.redis.script('LOAD', this.luaScripts.debitBudget);
       this.checkAndDebitSha = await this.redis.script('LOAD', this.luaScripts.checkAndDebit);
+      await this.initializeRevocationSequence();
       this.connected = true;
     })();
     try {
       await this.connecting;
     } finally {
       this.connecting = null;
+    }
+  }
+
+  async initializeRevocationSequence() {
+    const currentRaw = await this.redis.get('revocation:seq');
+    let current = Number(currentRaw || 0);
+    if (!Number.isSafeInteger(current) || current < 0) current = 0;
+    if (current === 0 && currentRaw == null) {
+      const existing = await this.all('revocations');
+      const max = existing.reduce((m, r) => {
+        const n = Number(r.seq);
+        return Number.isSafeInteger(n) && n > m ? n : m;
+      }, 0);
+      if (max > current) {
+        await this.redis.set('revocation:seq', String(max));
+      } else {
+        await this.redis.set('revocation:seq', '0', 'NX');
+      }
     }
   }
 
