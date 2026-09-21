@@ -13,6 +13,7 @@ class RedisStore {
       ...opts
     });
     this.connected = false;
+    this.connecting = null;
     this.luaScripts = {
       consumeNonce: `
         local key = KEYS[1]
@@ -80,13 +81,20 @@ class RedisStore {
   }
 
   async connect() {
-    if (!this.connected) {
+    if (this.connected) return;
+    if (this.connecting) return this.connecting;
+    this.connecting = (async () => {
       await this.redis.connect();
       this.consumeNonceSha = await this.redis.script('LOAD', this.luaScripts.consumeNonce);
       this.consumeActionJTISha = await this.redis.script('LOAD', this.luaScripts.consumeActionJTI);
       this.debitBudgetSha = await this.redis.script('LOAD', this.luaScripts.debitBudget);
       this.checkAndDebitSha = await this.redis.script('LOAD', this.luaScripts.checkAndDebit);
       this.connected = true;
+    })();
+    try {
+      await this.connecting;
+    } finally {
+      this.connecting = null;
     }
   }
 
