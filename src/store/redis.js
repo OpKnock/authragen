@@ -277,10 +277,18 @@ class RedisStore {
   }
 
   async all(col) {
-    const keys = await this.redis.keys(`${col}:*`);
-    if (keys.length === 0) return [];
-    const values = await this.redis.mget(keys);
-    return values.filter(v => v).map(v => JSON.parse(v));
+    await this.connect();
+    const values = [];
+    let cursor = '0';
+    do {
+      const [next, keys] = await this.redis.scan(cursor, 'MATCH', col + ':*', 'COUNT', 500);
+      cursor = next;
+      if (keys.length) {
+        const batch = await this.redis.mget(keys);
+        values.push(...batch.filter(v => v).map(v => JSON.parse(v)));
+      }
+    } while (cursor !== '0');
+    return values;
   }
   async dumpCollection(collection){ return this.all(collection); }
   async getRecord(collection,id){ await this.connect(); const v=await this.redis.get(collection+':'+id); return v?JSON.parse(v):null; }
