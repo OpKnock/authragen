@@ -157,9 +157,27 @@ async function body(req, opts) {
 let lock = Promise.resolve();
 function withLock(fn) { const r = lock.then(fn); lock = r.catch(() => {}); return r; }
 
+const SEEN_TTL_MS = 10 * 60 * 1000;
+const SEEN_MAX = 50000;
 const seen = new Map();
-function isSeen(pid, resource) { return seen.has(pid) && seen.get(pid).has(resource); }
-function markSeen(pid, resource) { if (!seen.has(pid)) seen.set(pid, new Set()); seen.get(pid).add(resource); }
+function seenKey(pid, resource) { return String(pid) + '\\x00' + String(resource); }
+function isSeen(pid, resource) {
+  const key = seenKey(pid, resource);
+  const at = seen.get(key);
+  if (at == null) return false;
+  if (Date.now() - at > SEEN_TTL_MS) { seen.delete(key); return false; }
+  return true;
+}
+function markSeen(pid, resource) {
+  const key = seenKey(pid, resource);
+  seen.delete(key);
+  seen.set(key, Date.now());
+  while (seen.size > SEEN_MAX) {
+    const first = seen.keys().next().value;
+    if (first == null) break;
+    seen.delete(first);
+  }
+}
 
 function callerKey(req) {
   const bearer = auth.bearerOf(req);
