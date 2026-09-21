@@ -7,7 +7,7 @@ const { createOrgRecord, publicOrg, orgPubkey, issuePassport, publicPassport, ro
   createBlueprint, blueprintInstances, isOrgLocked, assertOrgUsable,
   assertPassportUsable, keyFor, registerDelegation, assertTokenUsable, tokenCovers,
   checkBudget, checkBudgetFresh, debitBudget, allowCustody, addRevocation, revocationHead } = require('./tokens');
-const { evaluate, simulate, detectConflicts, newPolicy, seedPolicies, policyHash } = require('./policy');
+const { evaluate, simulate, detectConflicts, validatePolicyBody, newPolicy, seedPolicies, policyHash } = require('./policy');
 const { score, listRiskProviders } = require('./risk');
 const audit = require('./audit');
 const auth = require('./auth');
@@ -727,7 +727,16 @@ async function main() {
           const cur = getStore().get('policies', id);
           if (!cur) throw Object.assign(new Error('unknown policy'), { code: 'not_found' });
           auth.requireRole(k, cur.org_id, 'admin');
-          const next = { ...cur, ...b, id: cur.id, org_id: cur.org_id, version: (cur.version || 1) + 1, updated_at: Date.now() };
+          const next = {
+            ...cur,
+            ...b,
+            id: cur.id,
+            org_id: cur.org_id,
+            version: (cur.version || 1) + 1,
+            updated_at: Date.now()
+          };
+          validatePolicyBody(next);
+          next.priority = Number(next.priority || 0);
           next.hash = policyHash(next);
           getStore().put('policies', next);
           audit.append({ org_id: next.org_id, actor: k.id, action: 'policy.update', resource: next.id, decision: 'allow', risk: 0, policy_id: next.id, policy_hash: next.hash, reasons: [`v:${next.version}`], request_id: req._rid });
