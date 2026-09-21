@@ -1,0 +1,70 @@
+name: Persistence & Load Validation
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+jobs:
+  persistence-and-load:
+    name: Postgres + Redis + Load
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: authragen
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d authragen"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: npm
+      - run: npm ci
+      - name: Centralized audit persistence
+        run: npm run test:audit
+      - name: Distributed persistence and atomicity
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/authragen
+          REDIS_URL: redis://localhost:6379
+        run: node test/persistence_smoke.js
+      - name: Postgres load
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/authragen
+          REDIS_URL: redis://localhost:6379
+          AUTHRA_LOAD_STORE: postgres
+          AUTHRA_LOAD_REQUESTS: '5000'
+          AUTHRA_LOAD_CONCURRENCY: '100'
+          AUTHRA_LOAD_PORT: '8899'
+        run: node test/load.js
+      - name: Redis load
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/authragen
+          REDIS_URL: redis://localhost:6379
+          AUTHRA_LOAD_STORE: redis
+          AUTHRA_LOAD_REQUESTS: '5000'
+          AUTHRA_LOAD_CONCURRENCY: '100'
+          AUTHRA_LOAD_PORT: '8900'
+        run: node test/load.js
