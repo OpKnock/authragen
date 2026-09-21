@@ -81,17 +81,17 @@ jobs:
           node -e "const a=require('./npm-audit.json'); console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities}, null, 2))"
       - name: Gate production dependency advisories
         run: npm audit --omit=dev --audit-level=high
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: javascript,python
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
       - uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy.sarif'
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy.sarif'
       - uses: gitleaks/gitleaks-action@v2
