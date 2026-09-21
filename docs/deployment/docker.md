@@ -79,6 +79,13 @@ spec:
             secretKeyRef:
               name: authragen-secrets
               key: kms-backend
+        - name: AUTHRA_STORE
+          value: "postgres"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: authragen-secrets
+              key: database-url
         - name: AUTHRA_ANCHOR_URL
           valueFrom:
             secretKeyRef:
@@ -161,6 +168,7 @@ metadata:
 type: Opaque
 stringData:
   kms-backend: "aws"
+  database-url: "postgres://user:password@postgres.example/authragen"
   anchor-url: "https://rekor.example.com/api/v1/log/entries"
 ```
 
