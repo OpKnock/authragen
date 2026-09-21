@@ -50,6 +50,18 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/authragen
           REDIS_URL: redis://localhost:6379
         run: node test/persistence_smoke.js
+      - name: Postgres two-instance HTTP
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/authragen
+          REDIS_URL: redis://localhost:6379
+          AUTHRA_MULTI_STORE: postgres
+        run: node test/multi_instance_http.js
+      - name: Redis two-instance HTTP
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/authragen
+          REDIS_URL: redis://localhost:6379
+          AUTHRA_MULTI_STORE: redis
+        run: node test/multi_instance_http.js
       - name: Postgres load
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/authragen
