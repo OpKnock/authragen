@@ -828,8 +828,9 @@ async function main() {
 
       async function doVerify({ envelope, org_id, token_id }) {
         if (token_id) {
+          if (!org_id) throw Object.assign(new Error('org_id required when verifying a registered token'), { code: 'bad_request' });
           const tok = getStore().get('tokens', token_id);
-          if (!tok) throw Object.assign(new Error('unknown token'), { code: 'token_unknown' });
+          if (!tok || tok.org_id !== org_id) throw Object.assign(new Error('unknown token'), { code: 'token_unknown' });
           assertTokenUsable(tok);
           return { ok: true, mode: 'registered', jti: tok.id, sub: tok.sub, depth: tok.depth, signature_valid: true, credential_valid: true, expiry_valid: true, revocation_freshness: 'fresh' };
         }
