@@ -23,10 +23,27 @@ function CHECKPOINTS() { return path.join(dataDir(), 'checkpoints.jsonl'); }
 // Back-compat constants (first-load values) — internal code uses the functions above.
 const LOG_PATH = LOG; const STATE_PATH = STATE; const CHECKPOINTS_PATH = CHECKPOINTS;
 
+// When a durable Postgres/Redis store is configured, the centralized store is the
+// authoritative audit/checkpoint repository. File mode keeps the original local
+// append-only implementation for development and single-instance deployments.
+let activeStore = null;
+function configureStore(store) { activeStore = store || null; }
+function remoteAudit() { return !!activeStore && activeStore.backend && activeStore.backend() !== 'file'; }
+function centralReceipts() {
+  if (!remoteAudit()) return null;
+  return (activeStore.all('audit_receipts') || []).slice().sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0));
+}
+function centralCheckpoints() {
+  if (!remoteAudit()) return null;
+  return (activeStore.all('audit_checkpoints') || []).slice().sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+}
+async function flush() {
+  if (remoteAudit() && typeof activeStore.flush === 'function') await activeStore.flush();
+}
+
 function state() {
   try { return JSON.parse(fs.readFileSync(STATE(), 'utf8')); }
   catch {
-    // Recover state from a valid log, but never treat a malformed log as a fresh log.
     const all = readAll();
     if (!all.length) return { count: 0, head: 'GENESIS' };
     return { count: all.length, head: all[all.length - 1].hash };
@@ -48,21 +65,23 @@ function redact(entry) {
   return out;
 }
 function append(entry) {
-  // Concurrency-safe + durable: O(1) state read, single appendFileSync (atomic for
-  // small writes on POSIX), atomic state rewrite via rename. The server mutex
-  // serializes execute(); authorize() appends are independent sequence numbers.
-  // Production Postgres: INSERT with SERIAL seq + RETURNING (transactional).
-  const st = state();
-  const seq = st.count + 1;
+  const all = readAll();
+  const prev = all.length ? all[all.length - 1].hash : 'GENESIS';
+  const seq = all.length + 1;
   const safe = redact(entry);
-  const body = { seq, id: `rcpt_${seq}`, ts: Date.now(), prev_hash: st.head, ...safe };
-  // Every receipt carries request ID + policy version/hash when available (callers set them).
+  const body = { seq, id: `rcpt_${seq}`, ts: Date.now(), prev_hash: prev, ...safe };
   if (!body.request_id) body.request_id = 'rq_' + require('node:crypto').randomBytes(6).toString('hex');
-  const hash = sha256hex(st.head + '|' + canonical(body));
+  const hash = sha256hex(prev + '|' + canonical(body));
   const rec = { ...body, hash };
+
+  if (remoteAudit()) {
+    activeStore.put('audit_receipts', rec);
+    return rec;
+  }
+
   const dir = require('node:path').dirname(LOG());
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
-  fs.appendFileSync(LOG(), JSON.stringify(rec) + '\n');
+  fs.appendFileSync(LOG(), JSON.stringify(rec) + '\\n');
   const tmp = STATE() + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify({ count: seq, head: hash }));
   fs.renameSync(tmp, STATE());
@@ -105,26 +124,34 @@ function verify() {
   return { ok: true, count: all.length, head: prev };
 }
 async function checkpoint(signer) {
-  const st = state();
-  const prev = lastCheckpoint();
+  const all = readAll();
+  const count = all.length;
+  const head = count ? all[count - 1].hash : 'GENESIS';
+  const prevRec = lastCheckpoint();
   const body = {
-    v: 1, alg: signer.alg || 'EdDSA', ts: Date.now(), count: st.count, head: st.head,
-    prev: prev ? prev.hash : 'GENESIS', gateway_pubkey: signer.pubkey,
+    v: 1, alg: signer.alg || 'EdDSA', ts: Date.now(), count, head,
+    prev: prevRec ? prevRec.hash : 'GENESIS', gateway_pubkey: signer.pubkey,
   };
   const hash = sha256hex(canonical(body));
-  const rec = { ...body, hash, signature: await signer.signCanonical({ ...body, hash }) };
-  fs.mkdirSync(path.dirname(CHECKPOINTS()), { recursive: true });
-  fs.appendFileSync(CHECKPOINTS(), JSON.stringify(rec) + '\n');
+  const rec = { ...body, id: 'chk_' + crypto.randomBytes(6).toString('hex'), hash, signature: await signer.signCanonical({ ...body, hash }) };
+  if (remoteAudit()) {
+    activeStore.put('audit_checkpoints', rec);
+  } else {
+    fs.mkdirSync(path.dirname(CHECKPOINTS()), { recursive: true });
+    fs.appendFileSync(CHECKPOINTS(), JSON.stringify(rec) + '\\n');
+  }
   const anchorUrl = process.env.AUTHRA_ANCHOR_URL;
   if (anchorUrl) anchor(rec, anchorUrl);
-  else console.log(`[authragen] checkpoint #${st.count} ${hash.slice(0, 16)}… (no AUTHRA_ANCHOR_URL — printed for external anchoring)`);
+  else console.log(`[authragen] checkpoint #${count} ${hash.slice(0, 16)}… (no AUTHRA_ANCHOR_URL — printed for external anchoring)`);
   return rec;
 }
 function lastCheckpoint() {
+  const central = centralCheckpoints();
+  if (central) return central.length ? central[central.length - 1] : null;
   try {
     const raw = fs.readFileSync(CHECKPOINTS(), 'utf8').trim();
     if (!raw) return null;
-    const lines = raw.split('\n');
+    const lines = raw.split('\\n');
     return JSON.parse(lines[lines.length - 1]);
   } catch (e) {
     if (e?.code === 'ENOENT') return null;
@@ -132,9 +159,11 @@ function lastCheckpoint() {
   }
 }
 function listCheckpoints() {
+  const central = centralCheckpoints();
+  if (central) return central;
   try {
     const raw = fs.readFileSync(CHECKPOINTS(), 'utf8').trim();
-    return raw ? raw.split('\n').map(l => JSON.parse(l)) : [];
+    return raw ? raw.split('\\n').map(l => JSON.parse(l)) : [];
   } catch (e) {
     if (e?.code === 'ENOENT') return [];
     throw Object.assign(new Error('checkpoint log unreadable or malformed'), { code: 'audit_corrupt', cause: e });
@@ -150,4 +179,4 @@ function anchor(rec, target) {
     req.end(JSON.stringify({ type: 'authragen-checkpoint', ...rec }));
   } catch (e) { console.warn(`[authragen] bad AUTHRA_ANCHOR_URL: ${e.message}`); }
 }
-module.exports = { append, verify, readAll, byOrg, exportJsonl, evidenceBundle, checkpoint, listCheckpoints, lastCheckpoint };
+module.exports = { configureStore, flush, append, verify, readAll, byOrg, exportJsonl, evidenceBundle, checkpoint, listCheckpoints, lastCheckpoint };
