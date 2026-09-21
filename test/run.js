@@ -401,6 +401,9 @@ async function waitHealth(base, tries = 60) {
       ok(!!qa.action_token, 'step-up returns action credential');
       await admin._call('/v1/passports/' + qp.id + '/keys/revoke', 'POST', { kid: qp.keys.current.kid, reason: 'step-up-post-issue-revocation' });
       await throwsAsync(() => me.execute(qa.action_token, qi, { approval: qa.approval_credential }), /key_revoked|unknown_kid|revoked|credential key is no longer valid/, 'step-up action credential invalidated by agent key revocation');
+      const approvalList = await admin._call(`/v1/approvals?org_id=${org_id}`);
+      const approvalBlob = JSON.stringify(approvalList);
+      ok(!/"action_token"\s*:/.test(approvalBlob) && !/AR1\./.test(approvalBlob), 'approval list never exposes bearer credentials');
     }
 
     // --- lifecycle: suspend/quarantine reversible; revoke terminal + cascade ---
@@ -449,8 +452,8 @@ async function waitHealth(base, tries = 60) {
       const dx = await me.authorize(ix, me.signIntent(ix, tk), { token_id: tt.id }).catch(e => e.body || e);
       ok((dx && dx.decision === 'deny') || /revoked/.test(JSON.stringify(dx)), 'revoked token fails closed');
     }
-    const cp = await admin.checkpoint();
-    ok(!!cp.hash && !!cp.signature, 'signed audit checkpoint');
+    const checkpoint = await admin.checkpoint();
+    ok(!!checkpoint.hash && !!checkpoint.signature, 'signed audit checkpoint');
     ok((await admin.auditVerify(org_id)).ok === true, 'audit chain verifies');
     // revocation feed versioned
     {
