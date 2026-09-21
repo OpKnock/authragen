@@ -24,8 +24,8 @@ curl -X POST localhost:8787/v1/orgs/org_abc/keys \
 **Response (secret shown ONCE):**
 ```json
 {
-  "key_id": "ak_exec_abc123",
-  "secret": "sk_exec_xyz789...",  # SAVE THIS
+  "key_id": "${AUTHRA_KEY_ID}",
+  "secret": "${AUTHRA_NEW_SECRET}"
   "role": "executor",
   "expires_at": "2024-01-01T12:00:00Z",
   "created_at": "2024-01-01T00:00:00Z"
@@ -55,7 +55,7 @@ GET /v1/verify?envelope=...&org_id=...
 
 ```bash
 curl -X POST localhost:8787/v1/orgs/org_abc/keys/rotate \
-  -H "Authorization: Bearer ak_admin_..." \
+  -H "Authorization: Bearer ${AUTHRA_ADMIN_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"key_id": "ak_exec_abc123"}'
 ```
