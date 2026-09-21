@@ -262,7 +262,7 @@ const pg = require('pg');
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 // The gateway refreshes generic control-plane state from Postgres at each API request boundary.
-// Replay and token-spend reservation are adapter-backed and atomic; audit/checkpoint files remain local.
+// Replay, token-spend reservation, audit receipts and checkpoints are adapter-backed in durable mode.
 ```
 
 ## Redis Adapter (Production)
@@ -276,6 +276,7 @@ const redis = new Redis(process.env.REDIS_URL);
 // Action JTI: SET action:{jti} EX 3600 NX
 // The gateway refreshes generic control-plane state from Redis at each API request boundary.
 // Replay and token-spend reservation use Redis atomic primitives.
+```
 
 ## Federation
 
