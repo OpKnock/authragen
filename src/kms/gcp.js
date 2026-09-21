@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 class GcpKmsSigner extends Signer {
   constructor(opts = {}) {
     super();
+    this.algorithm = 'ES256';
     this.projectId = opts.projectId || process.env.GCP_PROJECT_ID;
     this.location = opts.location || process.env.AUTHRA_GCP_KMS_LOCATION || 'global';
     this.orgKeyRing = opts.orgKeyRing || process.env.AUTHRA_GCP_KMS_ORG_KEY_RING;
@@ -46,6 +47,8 @@ class GcpKmsSigner extends Signer {
     });
   }
 
+  getAlgorithm() { return this.algorithm; }
+
   getOrgPublicKey() {
     return this._orgPubKey.export({ type: 'spki', format: 'der' }).toString('base64url');
   }
@@ -69,6 +72,9 @@ class GcpKmsSigner extends Signer {
     });
     return resp.signature.toString('base64url');
   }
+
+  async signBytes(data) { return this.signOrgRoot(Buffer.from(data)); }
+  async signCanonical(obj) { const { canonical } = require('../crypto'); return this.signBytes(Buffer.from(canonical(obj), 'utf8')); }
 
   async verifyOrgRoot(data, signature) {
     return crypto.verify('sha256', Buffer.from(data), this._orgPubKey, Buffer.from(signature, 'base64url'));
