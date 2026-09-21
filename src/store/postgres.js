@@ -16,10 +16,16 @@ class PostgresStore {
 
   async init() {
     if (this.initialized) return;
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      
+    if (this._initing) return this._initing;
+    this._initing = (async () => {
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        // Serialize concurrent schema init across connections/instances:
+        // CREATE TABLE IF NOT EXISTS still races on the implicit composite
+        // type when two transactions create the same table at once.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['authragen_schema_init']);
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS orgs (
           id TEXT PRIMARY KEY,
@@ -243,12 +249,14 @@ class PostgresStore {
 
       await client.query('COMMIT');
       this.initialized = true;
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
-    }
+      } catch (e) {
+        try { await client.query('ROLLBACK'); } catch {}
+        throw e;
+      } finally {
+        client.release();
+      }
+    })().finally(() => { this._initing = null; });
+    return this._initing;
   }
 
   async close() {

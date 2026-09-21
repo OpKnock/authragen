@@ -130,7 +130,10 @@ function decodeX509SvidMessages(frames) {
 }
 async function workloadRpc({socketPath='/run/spire/sockets/agent.sock', rpcPath, request=Buffer.alloc(0), timeoutMs=5000}={}) {
   const http2=require('node:http2');
-  const client=http2.connect('http://localhost',{socketPath});
+  const net=require('node:net');
+  // node:http2.connect ignores a bare socketPath option (it would dial
+  // localhost:80 instead), so dial the unix socket explicitly.
+  const client=http2.connect('http://localhost',{ createConnection: () => net.connect(socketPath) });
   return new Promise((resolve,reject)=>{
     const chunks=[]; let settled=false;
     const timer=setTimeout(()=>{if(!settled){settled=true;client.destroy();reject(new Error('SPIFFE Workload API timeout'));}},timeoutMs);
