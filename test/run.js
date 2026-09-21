@@ -229,7 +229,7 @@ async function waitHealth(base, tries = 60) {
     // approval identity comes from the KEY, not the free-form by field
     const ap = await approver.approve(dp.approval_id, true, 'claimed-evil-identity');
     ok(ap.status === 'approved' && !!ap.approval_credential && !!ap.action_token, 'approval mints bound credential + token');
-    ok(String(ap.decided_by).includes(apk.split('.')[0]), 'approver identity is authenticated key, not free-form by');
+    ok(String(ap.decided_by).includes(apk.key_id), 'approver identity is authenticated key, not free-form by');
     const exp = await me.execute(ap.action_token, ip, { approval: ap.approval_credential });
     ok(exp.ok, 'approved intent executes');
     const evil = { ...ip, amount_cents: 99999 };
