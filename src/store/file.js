@@ -54,6 +54,7 @@ const store = {
   put(col, obj) { if (!mem[col]) mem[col] = {}; mem[col][obj.id] = obj; save(col); return obj; },
   del(col, id) { if (mem[col]) { delete mem[col][id]; save(col); } },
   has(col, id) { return !!(mem[col] && mem[col][id]); },
+  getTokenSpend(tokenId) { return Number(mem.tokens?.[tokenId]?.spent_cents || 0); },
   backend() { return 'json-file (dev/test; use Postgres in production)'; },
 };
 
