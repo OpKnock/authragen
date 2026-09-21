@@ -415,10 +415,20 @@ async function main() {
           logLine(200); return res.end(b);
         } catch { return fail(Object.assign(new Error('no console'), { code: 'not_found' })); }
       }
+      if ((p.startsWith('/v1/') || p === '/health') && typeof getStore().refresh === 'function') {
+        try {
+          await getStore().refresh();
+        } catch {
+          return fail(Object.assign(new Error('authoritative state refresh failed'), { code: 'storage_error' }));
+        }
+      }
+
       if ((p === '/v1/health' || p === '/health') && (req.method === 'GET' || req.method === 'HEAD')) {
         const payload = {
           ok: true, service: 'authragen', v: 2, protocol: PROTOCOL_VERSION, time: Date.now(),
           store: storeBackend(), persistence: getStore().lastWriteError ? 'degraded' : 'ok',
+          consistency: typeof getStore().consistencyMode === 'function' ? getStore().consistencyMode() : 'single-instance',
+          last_sync_at: getStore().lastSyncAt || null,
           custody_policy: allowCustody() ? 'dev (server custody ALLOWED)' : 'self-custody enforced'
         };
         if (req.method === 'HEAD') { logLine(200); res.writeHead(200, securityHeaders(req)); return res.end(); }
