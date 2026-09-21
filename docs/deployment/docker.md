@@ -1,6 +1,6 @@
 # Deployment
 
-AuthraGen requires Node.js 22.13+ at runtime. The file-backed key store is for development/testing; production should use a real KMS and durable storage.
+AuthraGen requires Node.js 22.13+ at runtime. The file-backed key store is for development/testing; production should use a real KMS and durable storage. The optional ML-DSA post-quantum profile requires a Node release with native WebCrypto ML-DSA support (24.7+).
 
 ## Docker (Recommended)
 
@@ -240,7 +240,19 @@ spec:
 | `AUTHRA_ALLOW_CUSTODY` | No | 0 | 0 |
 | `AUTHRA_KMS` | **Yes** | file | aws/gcp/vault/azure |
 | `AUTHRA_ANCHOR_URL` | Recommended | - | Set |
-| `AUTHRA_AUDIT_RETENTION_DAYS` | No | - | Not implemented; manage audit retention operationally |
+| `AUTHRA_AUDIT_RETENTION_DAYS` | No | - | Manage audit retention operationally; compaction policy is not built-in |
+| `AUTHRA_OIDC_ISSUER` | No | - | Enables OIDC bearer federation |
+| `AUTHRA_OIDC_CLIENT_ID` | No | - | Required with OIDC issuer |
+| `AUTHRA_OIDC_AUDIENCE` | No | client ID | OIDC accepted audience |
+| `AUTHRA_OIDC_ROLE_CLAIM` | No | roles | Claim used for RBAC mapping |
+| `AUTHRA_OIDC_ORG_CLAIM` | No | org_id | Claim used for organization mapping |
+| `AUTHRA_OIDC_ORG_ID` | No | - | Static OIDC organization mapping |
+| `AUTHRA_OIDC_ROLE_MAP` | No | built-in map | JSON role mapping |
+| `AUTHRA_SPIFFE_AUDIENCE` | No | - | Enables SPIFFE JWT-SVID bearer federation |
+| `AUTHRA_SPIFFE_JWKS_FILE` | No | - | SPIFFE JWT bundle/JWKS path |
+| `AUTHRA_SPIFFE_ORG_ID` | No | - | Static SPIFFE organization mapping |
+| `AUTHRA_SPIFFE_ROLE` | No | executor | AuthraGen role for SPIFFE principals |
+| `AUTHRA_SPIFFE_ALLOWED_IDS` | No | - | JSON allowlist of SPIFFE IDs |
 
 ## Postgres Adapter (Production)
 
@@ -264,6 +276,11 @@ const redis = new Redis(process.env.REDIS_URL);
 // Action JTI: SET action:{jti} EX 3600 NX
 // The gateway refreshes generic control-plane state from Redis at each API request boundary.
 // Replay and token-spend reservation use Redis atomic primitives.
+
+## Federation
+
+See [Federation](/api/federation) for OIDC issuer/JWKS configuration and SPIFFE/SPIRE SVID validation.
+JWT-SVID bearer federation should use the SPIFFE trust domain's JWKS bundle from a trusted local path.
 ```
 
 ## Monitoring
