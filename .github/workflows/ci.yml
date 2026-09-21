@@ -164,7 +164,7 @@ jobs:
           load: true
       - name: Smoke test container
         run: |
-          docker run -d --name authragen-test -p 8787:8787 authragen:test
+          docker run -d --name authragen-test -p 8787:8787 -e AUTHRA_ALLOW_INSECURE_PROD_DEFAULTS=1 authragen:test
           sleep 5
           curl -f http://localhost:8787/v1/health
           docker logs authragen-test
