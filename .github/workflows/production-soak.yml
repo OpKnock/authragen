@@ -1,0 +1,60 @@
+name: Production Soak
+
+on:
+  workflow_dispatch:
+    inputs:
+      store:
+        description: "Durable backend to soak"
+        required: true
+        default: postgres
+        type: choice
+        options: [postgres, redis]
+      requests:
+        description: "Total health requests"
+        required: true
+        default: "100000"
+        type: string
+      concurrency:
+        description: "Concurrent workers"
+        required: true
+        default: "200"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: authragen
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d authragen"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+          cache: npm
+      - run: npm ci
+      - name: Soak
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/authragen
+          REDIS_URL: redis://localhost:6379
+          AUTHRA_LOAD_STORE: ${{ github.event.inputs.store }}
+          AUTHRA_LOAD_REQUESTS: ${{ github.event.inputs.requests }}
+          AUTHRA_LOAD_CONCURRENCY: ${{ github.event.inputs.concurrency }}
+          AUTHRA_LOAD_PORT: "8920"
+        run: node test/load.js
