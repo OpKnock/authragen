@@ -80,6 +80,16 @@ async function waitHealth(base, tries = 60) {
       ok((() => { try { pubKeyFromWire(wire, 'ES256'); return false; } catch (e) { return /P-256|token_malformed/.test(String(e.message)); } })(), 'ES256 rejects non-P-256 public keys');
     }
 
+    // --- bounded metrics labels / error mapping ---
+    {
+      const noisy = 'missing-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+      const nr = await fetch(BASE + '/this-path-does-not-exist/' + noisy);
+      ok(nr.status === 404, 'unknown route returns 404');
+      const m = await fetch(BASE + '/metrics');
+      const mt = await m.text();
+      ok(!mt.includes(noisy), 'metrics do not use attacker-controlled unknown route labels');
+    }
+
     // --- security headers + CORS + request IDs ---
     {
       const r = await fetch(BASE + '/v1/health');
