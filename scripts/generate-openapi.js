@@ -14,7 +14,7 @@ const ROUTES = [
   ['POST','/v1/delegate'], ['GET','/v1/delegations'],
   ['POST','/v1/policies'], ['GET','/v1/policies'], ['POST','/v1/policies/simulate'], ['GET','/v1/policies/conflicts'], ['PUT','/v1/policies/:id'],
   ['POST','/v1/authorize'], ['POST','/v1/execute'],
-  ['POST','/v1/approvals/:id'], ['GET','/v1/approvals'],
+  ['POST','/v1/approvals/:id'], ['GET','/v1/approvals/:id'], ['GET','/v1/approvals'],
   ['POST','/v1/revoke'], ['GET','/v1/revoked'],
   ['POST','/v1/verify'], ['GET','/v1/verify'],
   ['GET','/v1/audit'], ['GET','/v1/audit/export'], ['POST','/v1/audit/evidence'],
@@ -102,6 +102,7 @@ for (const [method, rawPath] of ROUTES) {
       '401': { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
       '403': { description: 'Forbidden / policy denied', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
       '404': { description: 'Not Found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+      '410': { description: 'Expired or revoked', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
       '409': { description: 'Conflict / replay', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
       '429': { description: 'Rate Limited', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
       '500': { description: 'Storage/Internal Error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
