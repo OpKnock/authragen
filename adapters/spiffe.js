@@ -73,5 +73,81 @@ function validateJwtSvid(token, { jwks, expectedAudience, expectedSpiffeId = nul
   if (expectedSpiffeId && out.spiffe_id !== expectedSpiffeId) throw new Error('SPIFFE ID mismatch');
   return { ...out, valid: true };
 }
+
+function encVarint(n) {
+  const out=[]; let v=BigInt(n);
+  while(v>127n){out.push(Number((v&127n)|128n));v>>=7n;} out.push(Number(v)); return Buffer.from(out);
+}
+function encString(field, value) {
+  const b=Buffer.from(String(value),'utf8');
+  return Buffer.concat([encVarint((field<<3)|2),encVarint(b.length),b]);
+}
+function grpcFrame(message) {
+  const b=Buffer.from(message||Buffer.alloc(0));
+  const len=Buffer.alloc(4); len.writeUInt32BE(b.length,0);
+  return Buffer.concat([Buffer.from([0]),len,b]);
+}
+function readVarint(buf, state) {
+  let v=0n,shift=0n;
+  while(state.i<buf.length){const x=buf[state.i++];v|=BigInt(x&127)<<shift;if(!(x&128))return Number(v);shift+=7n;if(shift>63n)throw new Error('protobuf varint too large');}
+  throw new Error('truncated protobuf varint');
+}
+function decodeFields(buf) {
+  const fields=[]; const state={i:0};
+  while(state.i<buf.length){
+    const tag=readVarint(buf,state); const num=tag>>>3; const wt=tag&7;
+    if(wt===2){const len=readVarint(buf,state); if(state.i+len>buf.length)throw new Error('truncated protobuf field'); const value=buf.subarray(state.i,state.i+len);state.i+=len;fields.push({num,wt,value});}
+    else if(wt===0){fields.push({num,wt,value:readVarint(buf,state)});}
+    else if(wt===1){fields.push({num,wt,value:buf.subarray(state.i,state.i+8)});state.i+=8;}
+    else if(wt===5){fields.push({num,wt,value:buf.subarray(state.i,state.i+4)});state.i+=4;}
+    else throw new Error('unsupported protobuf wire type');
+  }
+  return fields;
+}
+function parseGrpcFrames(buffer) {
+  const frames=[]; let i=0;
+  while(i+5<=buffer.length){const compressed=buffer[i];const len=buffer.readUInt32BE(i+1);i+=5;if(i+len>buffer.length)throw new Error('truncated gRPC frame');if(compressed!==0)throw new Error('compressed gRPC messages are not supported');frames.push(buffer.subarray(i,i+len));i+=len;}
+  if(i!==buffer.length)throw new Error('trailing gRPC bytes');
+  return frames;
+}
+function decodeJwtSvidMessages(frames) {
+  return frames.flatMap(frame=>decodeFields(frame).filter(f=>f.num===1&&f.wt===2).map(f=>{
+    const fields=decodeFields(f.value); const out={};
+    for(const x of fields){if(x.num===1)out.spiffe_id=x.value.toString('utf8');else if(x.num===2)out.svid=x.value.toString('utf8');else if(x.num===3)out.hint=x.value.toString('utf8');}
+    return out;
+  }));
+}
+function decodeX509SvidMessages(frames) {
+  return frames.flatMap(frame=>decodeFields(frame).filter(f=>f.num===1&&f.wt===2).map(f=>{
+    const fields=decodeFields(f.value); const out={};
+    for(const x of fields){if(x.num===1)out.spiffe_id=x.value.toString('utf8');else if(x.num===2)out.x509_svid=Buffer.from(x.value);else if(x.num===3)out.x509_svid_key=Buffer.from(x.value);else if(x.num===4)out.bundle=Buffer.from(x.value);else if(x.num===5)out.hint=x.value.toString('utf8');}
+    return out;
+  }));
+}
+async function workloadRpc({socketPath='/run/spire/sockets/agent.sock', rpcPath, request=Buffer.alloc(0), timeoutMs=5000}={}) {
+  const http2=require('node:http2');
+  const client=http2.connect('http://localhost',{socketPath});
+  return new Promise((resolve,reject)=>{
+    const chunks=[]; let settled=false;
+    const timer=setTimeout(()=>{if(!settled){settled=true;client.destroy();reject(new Error('SPIFFE Workload API timeout'));}},timeoutMs);
+    const req=client.request({':method':'POST',':path':rpcPath,'content-type':'application/grpc','te':'trailers'});
+    req.on('data',c=>chunks.push(Buffer.from(c)));
+    req.on('error',e=>{if(!settled){settled=true;clearTimeout(timer);client.close();reject(e);}});
+    req.on('trailers',(headers)=>{const status=Number(headers['grpc-status']||0);if(status!==0&& !settled){settled=true;clearTimeout(timer);client.close();reject(new Error('SPIFFE Workload API grpc-status '+status+' '+String(headers['grpc-message']||'')));}});
+    req.on('end',()=>{if(settled)return;settled=true;clearTimeout(timer);client.close();try{resolve(parseGrpcFrames(Buffer.concat(chunks)));}catch(e){reject(e);}});
+    req.end(grpcFrame(request));
+  });
+}
+async function fetchJwtSvidFromWorkloadApi({socketPath, audience, spiffeId=null}={}) {
+  if(!audience)throw new Error('SPIFFE Workload API audience required');
+  const request=Buffer.concat([].concat((Array.isArray(audience)?audience:[audience]).map(x=>encString(1,x)),spiffeId?[encString(2,spiffeId)]:[]));
+  const frames=await workloadRpc({socketPath,rpcPath:'/spiffe.workloadapi.v1.SpiffeWorkloadAPI/FetchJWTSVID',request});
+  const svids=decodeJwtSvidMessages(frames); if(!svids.length)throw new Error('SPIFFE Workload API returned no JWT-SVID'); return svids;
+}
+async function fetchX509SvidFromWorkloadApi({socketPath}={}) {
+  const frames=await workloadRpc({socketPath,rpcPath:'/spiffe.workloadapi.v1.SpiffeWorkloadAPI/FetchX509SVID'});
+  const svids=decodeX509SvidMessages(frames); if(!svids.length)throw new Error('SPIFFE Workload API returned no X.509-SVID'); return svids;
+}
+
 function loadTrustBundle(file) { return fs.readFileSync(file, 'utf8'); }
-module.exports = { validateX509Svid, validateJwtSvid, extractSpiffeIds, loadTrustBundle };
+module.exports = { validateX509Svid, validateJwtSvid, extractSpiffeIds, loadTrustBundle, workloadRpc, fetchJwtSvidFromWorkloadApi, fetchX509SvidFromWorkloadApi };
