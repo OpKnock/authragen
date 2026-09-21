@@ -203,7 +203,7 @@ async function authorize({ intent, intent_sig, kid, token_id, context = {}, dry_
       assertTokenUsable(tok);
       if (tok.sub !== ci.passport_id) throw Object.assign(new Error('Token subject mismatch'), { code: 'token_mismatch' });
       if (!tokenCovers(tok, ci.action, ci.resource, ci.destination)) throw Object.assign(new Error('Token scope/targets insufficient'), { code: 'scope_insufficient' });
-      checkBudget(tok, ci.amount_cents);
+      await checkBudgetFresh(tok, ci.amount_cents);
     }
   } catch (e) { return deny([e.code || 'token_error'], 100, null); }
   const passRec = getStore().get('passports', ci.passport_id);
