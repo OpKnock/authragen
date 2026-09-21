@@ -36,7 +36,8 @@
     "test:pq": "node test/pq.js",
     "test:distributed": "node test/persistence_smoke.js",
     "test:multi": "node test/multi_instance_http.js",
-    "test:load": "node test/load.js"
+    "test:load": "node test/load.js",
+    "test:battle": "node test/battle.js"
   },
   "engines": {
     "node": ">=22.13.0"

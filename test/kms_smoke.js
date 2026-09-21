@@ -10,7 +10,7 @@ const { initSigner } = require('../src/kms');
   if (!['aws', 'gcp', 'azure', 'vault', 'file'].includes(type)) throw new Error('AUTHRA_KMS must be aws|gcp|azure|vault|file');
 
   const signer = await initSigner(type, path.join(os.tmpdir(), 'authragen-kms-' + Date.now()), {});
-  assert.equal(signer.getAlgorithm(), 'ES256');
+  assert.equal(signer.getAlgorithm(), type === 'file' ? 'EdDSA' : 'ES256');
 
   const message = Buffer.from('authragen-kms-integration-' + Date.now());
   const orgSig = await signer.signOrgRoot(message);

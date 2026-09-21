@@ -20,15 +20,15 @@ function jwt(header, claims, privateKey) {
   const jwk = publicKey.export({ format: 'jwk' });
   jwk.kid = 'oidc-test-1'; jwk.alg = 'RS256'; jwk.use = 'sig';
 
-  const issuer = 'http://127.0.0.1';
+  let actualIssuer = 'http://127.0.0.1';
   const server = http.createServer((req, res) => {
-    if (req.url === '/.well-known/openid-configuration') return res.end(JSON.stringify({ issuer, jwks_uri: issuer + '/jwks' }));
+    if (req.url === '/.well-known/openid-configuration') return res.end(JSON.stringify({ issuer: actualIssuer, jwks_uri: actualIssuer + '/jwks' }));
     if (req.url === '/jwks') return res.end(JSON.stringify({ keys: [jwk] }));
     res.statusCode = 404; res.end();
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
-  const actualIssuer = 'http://127.0.0.1:' + port;
+  actualIssuer = 'http://127.0.0.1:' + port;
 
   const verifier = new OidcVerifier({
     issuer: actualIssuer,
@@ -56,7 +56,9 @@ function jwt(header, claims, privateKey) {
   );
   assert.equal(verifier.verify(nonceToken, { nonce: 'n-123' }).claims.nonce, 'n-123');
   assert.throws(() => verifier.verify(nonceToken, { nonce: 'wrong' }), /nonce mismatch/);
-  const bad = token.slice(0, -1) + (token.endsWith('A') ? 'B' : 'A');
+  const sigParts = token.split('.');
+  sigParts[2] = (sigParts[2][0] === 'A' ? 'B' : 'A') + sigParts[2].slice(1);
+  const bad = sigParts.join('.');
   assert.throws(() => verifier.verify(bad), /signature invalid/);
   await new Promise(resolve => server.close(resolve));
   console.log('OIDC discovery + ID-token validation: PASS');

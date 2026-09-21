@@ -128,7 +128,7 @@ jobs:
           sarif_file: 'trivy.sarif'
       - name: Gitleaks current-tree scan
         run: |
-          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:8.24.3 detect --source=/repo --redact --verbose --exit-code=1
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.3 detect --source=/repo --redact --verbose --exit-code=1
 
   build:
     name: Build Artifacts

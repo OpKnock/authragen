@@ -16,6 +16,7 @@ class FileSigner extends Signer {
   }
 
   async init() {
+    fs.mkdirSync(this.dataDir, { recursive: true });
     if (!fs.existsSync(this.orgKeyPath)) {
       const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
       fs.writeFileSync(this.orgKeyPath, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });

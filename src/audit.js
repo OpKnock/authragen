@@ -13,6 +13,7 @@
 const fs = require('node:fs');
 const http = require('node:http');
 const https = require('node:https');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { canonical, sha256hex } = require('./crypto');
 
@@ -65,6 +66,19 @@ function redact(entry) {
   return out;
 }
 function append(entry) {
+  if (remoteAudit()) {
+    const central = centralReceipts() || [];
+    const prev = central.length ? central[central.length - 1].hash : 'GENESIS';
+    const seq = central.length + 1;
+    const safe = redact(entry);
+    const body = { seq, id: `rcpt_${seq}`, ts: Date.now(), prev_hash: prev, ...safe };
+    if (!body.request_id) body.request_id = 'rq_' + require('node:crypto').randomBytes(6).toString('hex');
+    const hash = sha256hex(prev + '|' + canonical(body));
+    const rec = { ...body, hash };
+    activeStore.put('audit_receipts', rec);
+    return rec;
+  }
+
   const all = readAll();
   const prev = all.length ? all[all.length - 1].hash : 'GENESIS';
   const seq = all.length + 1;
@@ -73,11 +87,6 @@ function append(entry) {
   if (!body.request_id) body.request_id = 'rq_' + require('node:crypto').randomBytes(6).toString('hex');
   const hash = sha256hex(prev + '|' + canonical(body));
   const rec = { ...body, hash };
-
-  if (remoteAudit()) {
-    activeStore.put('audit_receipts', rec);
-    return rec;
-  }
 
   const dir = require('node:path').dirname(LOG());
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
@@ -103,9 +112,17 @@ async function evidenceBundle({ org_id, intent_hash = null, passport_id = null, 
   return bundle;
 }
 function readAll() {
+  const central = centralReceipts();
+  if (central) return central;
+  let raw;
   try {
-    const raw = fs.readFileSync(LOG(), 'utf8').trim();
-    if (!raw) return [];
+    raw = fs.readFileSync(LOG(), 'utf8').trim();
+  } catch (e) {
+    if (e && e.code === 'ENOENT') return [];
+    throw Object.assign(new Error('audit log unreadable or malformed'), { code: 'audit_corrupt', cause: e });
+  }
+  if (!raw) return [];
+  try {
     return raw.split('\n').map(l => JSON.parse(l));
   } catch (e) {
     throw Object.assign(new Error('audit log unreadable or malformed'), { code: 'audit_corrupt', cause: e });

@@ -7,7 +7,7 @@ function resolveDataDir() { return process.env.AUTHRA_DATA || path.join(__dirnam
 const DATA_DIR = resolveDataDir();
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const FILES = ['orgs', 'passports', 'tokens', 'policies', 'revocations', 'approvals', 'apikeys', 'blueprints'];
+const FILES = ['orgs', 'passports', 'tokens', 'policies', 'revocations', 'approvals', 'apikeys', 'blueprints', 'audit_receipts', 'audit_checkpoints'];
 const mem = {};
 
 function loadAll() {
@@ -15,8 +15,18 @@ function loadAll() {
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
   for (const f of FILES) {
     const p = path.join(dir, f + '.json');
-    try { mem[f] = JSON.parse(fs.readFileSync(p, 'utf8')); }
-    catch { mem[f] = {}; }
+    let raw;
+    try {
+      raw = fs.readFileSync(p, 'utf8');
+    } catch (e) {
+      if (e && e.code === 'ENOENT') { mem[f] = {}; continue; }
+      throw Object.assign(new Error('storage file ' + f + '.json unreadable (fail-closed)'), { code: 'storage_corrupt', cause: e });
+    }
+    try {
+      mem[f] = JSON.parse(raw);
+    } catch (e) {
+      throw Object.assign(new Error('storage file ' + f + '.json malformed (fail-closed, refusing to reset)'), { code: 'storage_corrupt', cause: e });
+    }
   }
 }
 

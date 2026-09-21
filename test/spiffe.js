@@ -19,6 +19,12 @@ function b64u(x) { return Buffer.from(x).toString('base64url'); }
   const leaf = path.join(dir, 'leaf.crt');
   const ext = path.join(dir, 'leaf.ext');
 
+  try {
+    execFileSync('openssl', ['version'], { stdio: 'ignore' });
+  } catch {
+    console.log('openssl unavailable on this host: SKIP');
+    return;
+  }
   execFileSync('openssl', ['req','-x509','-newkey','rsa:2048','-nodes','-keyout',key,'-out',crt,'-subj','/CN=AuthraGen SPIFFE Test Root','-days','2'], { stdio:'ignore' });
   fs.writeFileSync(ext, 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=clientAuth,serverAuth\nsubjectAltName=URI:spiffe://example.org/ns/default/sa/authragen\n');
   execFileSync('openssl', ['req','-new','-newkey','rsa:2048','-nodes','-keyout',leafKey,'-out',csr,'-subj','/CN=authragen','-days','2'], { stdio:'ignore' });
