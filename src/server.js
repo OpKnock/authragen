@@ -7,7 +7,7 @@ const { createOrgRecord, publicOrg, orgPubkey, issuePassport, publicPassport, ro
   setPassportStatus, revokeKey, touchLastSeen, passportStatus, LIFECYCLE,
   createBlueprint, blueprintInstances, isOrgLocked, assertOrgUsable,
   assertPassportUsable, keyFor, registerDelegation, assertTokenUsable, tokenCovers,
-  checkBudget, debitBudget, allowCustody } = require('./tokens');
+  checkBudget, debitBudget, allowCustody, addRevocation, revocationHead } = require('./tokens');
 const { evaluate, simulate, detectConflicts, newPolicy, seedPolicies, policyHash } = require('./policy');
 const { score, listRiskProviders } = require('./risk');
 const audit = require('./audit');
@@ -151,6 +151,12 @@ function isSeen(pid, resource) { return seen.has(pid) && seen.get(pid).has(resou
 function markSeen(pid, resource) { if (!seen.has(pid)) seen.set(pid, new Set()); seen.get(pid).add(resource); }
 
 function callerKey(req) { return auth.lookupKey(auth.bearerOf(req)); }
+function publicApproval(ap) {
+  const out = { ...ap };
+  delete out.action_token;
+  delete out.approval_credential;
+  return out;
+}
 function orgRisk(org_id) {
   const org = getStore().get('orgs', org_id);
   return {
@@ -311,20 +317,6 @@ async function execute({ action_token, intent, approval, request_id = null }) {
       throw e;
     }
   });
-}
-
-let revSeq = 0;
-try {
-  for (const r of getStore().all('revocations')) if (r.seq > revSeq) revSeq = r.seq;
-} catch {}
-function addRevocation({ type, target, reason, org_id, kid = null }) {
-  const id = `${type}:${target}${kid ? ':' + kid : ''}`;
-  const existing = getStore().get('revocations', id);
-  if (existing) return existing;
-  revSeq++;
-  const rec = { id, seq: revSeq, type, target, kid: kid || null, org_id, reason: reason || 'manual', at: Date.now() };
-  getStore().put('revocations', rec);
-  return rec;
 }
 
 async function main() {
@@ -753,7 +745,6 @@ async function main() {
           if (ap.status === 'approved') {
             const att = await buildActionToken({ orgSigner: getOrgSigner(ap.org_id), org_id: ap.org_id, sub: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, amount_cents: ap.amount_cents, requires_approval: true, token_jti: ap.token_jti, aud: ap.aud || 'authragen', kid: ap.agent_kid || null });
             ap.action_jti = att.jti; getStore().put('approvals', ap);
-            ap.action_token = att.envelope;
             credential = await buildApproval({ orgSigner: getOrgSigner(ap.org_id), approval_id: ap.id, org_id: ap.org_id, passport_id: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, by: ap.decided_by, by_role: who.role, by_key_id: who.id, action_jti: att.jti, aud: ap.aud || 'authragen' });
             ap.approval_jti = credential.payload.jti || ap.id; getStore().put('approvals', ap);
           }
@@ -769,7 +760,7 @@ async function main() {
           auth.requireRole(k, org, 'reporter');
           let all = getStore().byOrg('approvals', org);
           if (u.query.status) all = all.filter(a => a.status === u.query.status);
-          return ok(200, { approvals: all.slice(-(Math.min(200, Number(u.query.limit) || 100))) });
+          return ok(200, { approvals: all.slice(-(Math.min(200, Number(u.query.limit) || 100))).map(publicApproval) });
         } catch (e) { return fail(e); }
       }
 
@@ -811,7 +802,7 @@ async function main() {
             .filter(r => (!r.org_id || r.org_id === org))
             .filter(r => (r.at || 0) >= since && (r.seq || 0) > sinceSeq)
             .sort((a, b) => (a.seq || 0) - (b.seq || 0));
-          return ok(200, { revocations: all, as_of: Date.now(), head_seq: revSeq, freshness_note: 'ONLINE live status. Offline verifiers: cache this feed + checkpoints; without a fresh feed you have authenticity-without-freshness.' });
+          return ok(200, { revocations: all, as_of: Date.now(), head_seq: revocationHead(), freshness_note: 'ONLINE live status. Offline verifiers: cache this feed + checkpoints; without a fresh feed you have authenticity-without-freshness.' });
         } catch (e) { return fail(e); }
       }
 
@@ -829,6 +820,10 @@ async function main() {
         if (!v.signature_valid) throw Object.assign(new Error('envelope signature invalid'), { code: 'sig_invalid' });
         if (!v.credential_valid) throw Object.assign(new Error(v.error || 'credential invalid'), { code: 'token_malformed' });
         if (v.payload.org_id !== org_id) throw Object.assign(new Error('credential organization mismatch'), { code: 'token_mismatch' });
+        const subject = getStore().get('passports', v.payload.sub);
+        if (!subject || subject.org_id !== org_id) throw Object.assign(new Error('credential subject unavailable'), { code: 'passport_unknown' });
+        assertPassportUsable(subject);
+        if (v.payload.kind === 'action' && v.payload.kid) keyFor(subject, v.payload.kid);
         let freshness = 'unknown (offline: poll GET /v1/revoked)';
         try {
           const live = v.payload.kind === 'action' && (getStore().has('revocations', 'action:' + v.payload.jti) || getStore().has('revocations', 'token:' + (v.payload.token_jti || '')));
