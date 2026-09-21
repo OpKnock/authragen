@@ -7,7 +7,7 @@
 | File storage = single-instance | No horizontal scaling | Use Postgres adapter (documented) |
 
 
-| Authoritative mirror is instance-local | Multiple gateway instances can diverge in reads | Use one instance per authoritative state store; shared-state coordination is a separate deployment concern |
+| Authoritative mirror is instance-local | Multiple gateway instances can diverge in reads and token-budget state | Use one gateway instance per authoritative state store until cross-instance coordination is added |
 
 ## KMS & Cryptography
 
@@ -33,6 +33,7 @@
 |------------|--------|------------|
 | Tamper-evident ≠ immutable | Full rewrite possible without anchor | `AUTHRA_ANCHOR_URL` to Rekor/timestamp service |
 | No built-in transparency log | Anchor hook only | Bring your own Rekor/TLSNotary |
+| Audit/checkpoint files remain local to `AUTHRA_DATA` | The configured state adapter does not currently make the audit chain database-backed | Use persistent storage plus export/external anchoring; integrate centralized audit storage before claiming database-backed audit durability |
 | Checkpoint key = single point | Compromise = fake checkpoints | Separate key; KMS-backed; rotation |
 | No log compression | Linear growth | Periodic export + archive (manual) |
 
@@ -57,6 +58,7 @@
 
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
+| One gateway deployment currently uses one signing root for its org namespace | A single root-key compromise affects all orgs in that deployment | Use separate deployments for stronger tenant isolation; per-org KMS roots are future work |
 | No OIDC federation | Can't bind to Entra/Okta/Google | Roadmap; wrapper possible |
 | No SPIFFE/SPIRE | No workload identity integration | Adapter pattern |
 | No standard token format | AR1 proprietary | JWT-compatible structure; converter possible |
