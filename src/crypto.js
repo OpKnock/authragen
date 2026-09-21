@@ -166,6 +166,6 @@ function open(token, pubKey) {
   return { header: b64uJsonDecode(h), payload: b64uJsonDecode(p) };
 }
 function err(code, message) { const e = new Error(message); e.code = code; return e; }
-function didFor(pubB64u) { return 'did:authragen:' + String(pubB64u).slice(0, 16); }
+function didFor(pubB64u) { return 'did:authragen:' + String(pubB64u); }
 
 module.exports = { b64uEncode, b64uDecode, b64uJsonEncode, b64uJsonDecode, canonical, hasDuplicateKeys, sha256hex, rid, generateEd25519, pubKeyFromB64u, pubKeyFromWire, verifyBytes, privKeyFromB64u, signCanonical, verifyCanonical, seal, open, didFor };
