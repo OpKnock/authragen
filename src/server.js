@@ -6,7 +6,7 @@ const { createOrgRecord, publicOrg, orgPubkey, issuePassport, publicPassport, ro
   setPassportStatus, revokeKey, touchLastSeen, passportStatus, LIFECYCLE,
   createBlueprint, blueprintInstances, isOrgLocked, assertOrgUsable,
   assertPassportUsable, keyFor, registerDelegation, assertTokenUsable, tokenCovers,
-  checkBudget, debitBudget, allowCustody, addRevocation, revocationHead } = require('./tokens');
+  checkBudget, checkBudgetFresh, debitBudget, allowCustody, addRevocation, revocationHead } = require('./tokens');
 const { evaluate, simulate, detectConflicts, newPolicy, seedPolicies, policyHash } = require('./policy');
 const { score, listRiskProviders } = require('./risk');
 const audit = require('./audit');
@@ -301,13 +301,13 @@ async function execute({ action_token, intent, approval, request_id = null }) {
         if (!tok || tok.org_id !== ci.org_id) throw Object.assign(new Error('Unknown delegation token'), { code: 'token_unknown' });
         assertTokenUsable(tok);
         if (!tokenCovers(tok, ci.action, ci.resource, ci.destination)) throw Object.assign(new Error('Token scope/targets insufficient'), { code: 'scope_insufficient' });
-        checkBudget(tok, ci.amount_cents);
+        await checkBudgetFresh(tok, ci.amount_cents);
       }
       const atomicStore = getStore();
       if (typeof atomicStore.checkAndDebitExecution === 'function') {
         const limit = tok ? (tok.constraints?.max_spend_cents ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
         const reservation = await atomicStore.checkAndDebitExecution(
-          ci.org_id, ci.nonce, att.jti, tok?.jti || null, ci.amount_cents, limit, 10 * 60 * 1000
+          ci.org_id, ci.nonce, att.jti, tok?.jti || null, ci.amount_cents, limit, 0
         );
         if (!reservation) {
           if (!await nonceStore.consumeOnce(ci.org_id + ':' + ci.nonce, 10 * 60 * 1000)) throw Object.assign(new Error('intent nonce already used (replay)'), { code: 'replay' });
@@ -316,9 +316,6 @@ async function execute({ action_token, intent, approval, request_id = null }) {
         } else if (!reservation.success) {
           const code = reservation.error === 'budget_exceeded' ? 'budget_exceeded' : 'replay';
           throw Object.assign(new Error(reservation.error || 'execution reservation rejected'), { code });
-        } else if (tok) {
-          tok.spent_cents = reservation.current;
-          getStore().put('tokens', tok);
         }
       } else {
         if (!await nonceStore.consumeOnce(ci.org_id + ':' + ci.nonce, 10 * 60 * 1000)) throw Object.assign(new Error('intent nonce already used (replay)'), { code: 'replay' });
