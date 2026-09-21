@@ -35,12 +35,14 @@ function get(url) {
 
   try {
     const deadline = Date.now() + 30000;
+    let ready = false;
     while (Date.now() < deadline) {
       try {
-        if ((await get('http://127.0.0.1:' + port + '/v1/health')) === 200) break;
+        if ((await get('http://127.0.0.1:' + port + '/v1/health')) === 200) { ready = true; break; }
       } catch {}
       await new Promise(r => setTimeout(r, 250));
     }
+    if (!ready) throw new Error('server did not become healthy within 30s');
 
     const total = Number(process.env.AUTHRA_LOAD_REQUESTS || 5000);
     const concurrency = Number(process.env.AUTHRA_LOAD_CONCURRENCY || 100);
