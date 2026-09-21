@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 class VaultSigner extends Signer {
   constructor(opts = {}) {
     super();
+    this.algorithm = 'ES256';
     this.address = opts.address || process.env.VAULT_ADDR || 'http://localhost:8200';
     this.token = opts.token || process.env.VAULT_TOKEN;
     this.orgKeyPath = opts.orgKeyPath || process.env.AUTHRA_VAULT_ORG_KEY || 'transit/keys/authragen-org';
@@ -47,6 +48,8 @@ class VaultSigner extends Signer {
     });
   }
 
+  getAlgorithm() { return this.algorithm; }
+
   getOrgPublicKey() {
     return this._orgPubKey.export({ type: 'spki', format: 'der' }).toString('base64url');
   }
@@ -72,6 +75,9 @@ class VaultSigner extends Signer {
     });
     return Buffer.from(resp.data.signature.split(':')[1], 'base64').toString('base64url');
   }
+
+  async signBytes(data) { return this.signOrgRoot(Buffer.from(data)); }
+  async signCanonical(obj) { const { canonical } = require('../crypto'); return this.signBytes(Buffer.from(canonical(obj), 'utf8')); }
 
   async verifyOrgRoot(data, signature) {
     return crypto.verify('sha256', Buffer.from(data), this._orgPubKey, Buffer.from(signature, 'base64url'));
