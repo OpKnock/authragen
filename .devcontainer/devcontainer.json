@@ -33,7 +33,7 @@
     }
   },
   "forwardPorts": [8787, 9229],
-  "postCreateCommand": "npm ci && pip install -q pytest httpx",
+  "postCreateCommand": "npm ci && pip install -q pytest httpx cryptography",
   "remoteUser": "node",
   "containerEnv": {
     "NODE_ENV": "development",
