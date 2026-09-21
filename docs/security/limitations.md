@@ -7,7 +7,7 @@
 | File storage = single-instance | No horizontal scaling | Use Postgres adapter (documented) |
 
 
-| Authoritative mirror is instance-local | Multiple gateway instances can diverge in ordinary control-plane reads | Use one gateway instance per authoritative state store until cross-instance coordination is added; replay and token-spend reservation are atomic on Postgres/Redis |
+| Remote control-plane reads use request-boundary snapshots | Each API request refreshes the in-memory mirror from Postgres/Redis before evaluation; very large installations pay extra read cost | Use Postgres/Redis for multi-instance deployments; tune gateway capacity and database resources as fleet size grows |
 
 ## KMS & Cryptography
 
@@ -82,7 +82,7 @@
 - [ ] SPIFFE/SPIRE workload identity integration
 - [ ] JWT/W3C Verifiable Credential interoperability profiles
 - [ ] Log compression, archival and retention controls
-- [ ] Cross-instance authoritative-state coordination
+- [ ] Cross-instance distributed locking / linearizable writes for every control-plane mutation
 - [ ] Formal interoperability/conformance certification
 
 ### Research
