@@ -20,9 +20,19 @@ const { createLogger } = require('./logger');
 const { createMetrics } = require('./metrics');
 const nonceStore = require('./nonce');
 
+function parseByteSize(value, fallback) {
+  if (value == null || value === '') return fallback;
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(1, Math.floor(value));
+  const m = String(value).trim().toLowerCase().match(/^(\d+(?:\.\d+)?)\s*(b|kb|kib|mb|mib|gb|gib)?$/);
+  if (!m) return fallback;
+  const mult = { b: 1, kb: 1024, kib: 1024, mb: 1024 ** 2, mib: 1024 ** 2, gb: 1024 ** 3, gib: 1024 ** 3 };
+  const bytes = Number(m[1]) * (mult[m[2] || 'b'] || 1);
+  return Number.isSafeInteger(Math.round(bytes)) ? Math.max(1, Math.round(bytes)) : fallback;
+}
+
 const PORT = process.env.PORT || 8787;
 const IS_PROD = process.env.NODE_ENV === 'production';
-const BODY_LIMIT = Number(process.env.AUTHRA_BODY_LIMIT || 256 * 1024);
+const BODY_LIMIT = parseByteSize(process.env.AUTHRA_BODY_LIMIT, 256 * 1024);
 const CORS_ORIGIN = process.env.AUTHRA_CORS || '';
 const TRUST_PROXY = process.env.AUTHRA_TRUST_PROXY === '1';
 const RISK_CEILING_DEFAULT = Number(process.env.AUTHRA_RISK_CEILING || 85);
@@ -78,19 +88,25 @@ function send(req, res, code, obj) {
   res.writeHead(code, { ...securityHeaders(req), 'content-length': b.length });
   res.end(b);
 }
-function sendErr(req, res, e) {
+function errorStatus(e) {
+  const errCode = e?.code || '';
   const map = {
     unauthorized: 401, forbidden: 403, bad_request: 400, bad_intent: 400,
     rate_limited: 429, quota_exceeded: 429, org_locked: 403, token_expired: 403,
     approval_expired: 403, intent_expired: 403, replay: 409, approval_resolved: 409,
     storage_error: 500,
   };
-  let code = map[e.code] || e.status;
+  let code = e?.status || map[errCode];
   if (!code) {
-    if (/unknown|not_found/.test(e.code || '')) code = 404;
-    else if (/expired|revoked|suspended|quarantined|denied|insufficient|exceeded|replay|mismatch|invalid|malformed|unauthorized|forbidden|custody|locked/.test(e.code || '')) code = 403;
+    if (/unknown|not_found/.test(errCode)) code = 404;
+    else if (/expired|revoked|suspended|quarantined|denied|insufficient|exceeded|replay|mismatch|invalid|malformed|unauthorized|forbidden|custody|locked/.test(errCode)) code = 403;
     else code = 400;
   }
+  return code;
+}
+
+function sendErr(req, res, e) {
+  const code = errorStatus(e);
   const body = { error: e.code || 'bad_request', request_id: req._rid };
   if (e.retryAfter) { res.setHeader?.('retry-after', String(e.retryAfter)); body.retry_after = e.retryAfter; }
   body.message = IS_PROD && code === 500 ? 'internal error' : String(e.message || e.code).slice(0, 500);
@@ -263,6 +279,11 @@ async function execute({ action_token, intent, approval, request_id = null }) {
       }
       const pass = getStore().get('passports', ci.passport_id);
       assertPassportUsable(pass);
+      try {
+        keyFor(pass, att.kid || undefined);
+      } catch (e) {
+        throw Object.assign(new Error('action credential key is no longer valid'), { code: e.code || 'key_revoked' });
+      }
       let tok = null;
       if (att.token_jti) {
         tok = getStore().get('tokens', att.token_jti);
@@ -291,8 +312,11 @@ try {
   for (const r of getStore().all('revocations')) if (r.seq > revSeq) revSeq = r.seq;
 } catch {}
 function addRevocation({ type, target, reason, org_id, kid = null }) {
+  const id = `${type}:${target}${kid ? ':' + kid : ''}`;
+  const existing = getStore().get('revocations', id);
+  if (existing) return existing;
   revSeq++;
-  const rec = { id: `${type}:${target}${kid ? ':' + kid : ''}`, seq: revSeq, type, target, kid: kid || null, org_id, reason: reason || 'manual', at: Date.now() };
+  const rec = { id, seq: revSeq, type, target, kid: kid || null, org_id, reason: reason || 'manual', at: Date.now() };
   getStore().put('revocations', rec);
   return rec;
 }
@@ -331,8 +355,18 @@ async function main() {
       metrics.httpRequestDuration.observe({ method: req.method, route: p, status: code }, duration / 1000);
       metrics.httpRequestsTotal.inc({ method: req.method, route: p, status: code });
     };
-    const ok = (code, obj) => { logLine(code); return send(req, res, code, { request_id: req._rid, ...obj }); };
-    const fail = (e) => { const code = e.status || 400; logLine(code); return sendErr(req, res, e); };
+    const ok = async (code, obj) => {
+      try {
+        await getStore().flush?.();
+      } catch (e) {
+        const storageErr = Object.assign(new Error('persistent storage unavailable'), { code: 'storage_error', status: 500 });
+        logLine(500);
+        return sendErr(req, res, storageErr);
+      }
+      logLine(code);
+      return send(req, res, code, { request_id: req._rid, ...obj });
+    };
+    const fail = (e) => { const code = errorStatus(e); logLine(code); return sendErr(req, res, e); };
     try {
       if (req.method === 'OPTIONS') {
         res.writeHead(204, { ...securityHeaders(req), 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'access-control-allow-headers': 'authorization,content-type,x-bootstrap-token,x-request-id' });
@@ -347,7 +381,11 @@ async function main() {
         } catch { return fail(Object.assign(new Error('no console'), { code: 'not_found' })); }
       }
       if ((p === '/v1/health' || p === '/health') && (req.method === 'GET' || req.method === 'HEAD')) {
-        const payload = { ok: true, service: 'authragen', v: 2, protocol: PROTOCOL_VERSION, time: Date.now(), store: storeBackend(), custody_policy: allowCustody() ? 'dev (server custody ALLOWED)' : 'self-custody enforced' };
+        const payload = {
+          ok: true, service: 'authragen', v: 2, protocol: PROTOCOL_VERSION, time: Date.now(),
+          store: storeBackend(), persistence: getStore().lastWriteError ? 'degraded' : 'ok',
+          custody_policy: allowCustody() ? 'dev (server custody ALLOWED)' : 'self-custody enforced'
+        };
         if (req.method === 'HEAD') { logLine(200); res.writeHead(200, securityHeaders(req)); return res.end(); }
         return ok(200, payload);
       }
@@ -438,7 +476,12 @@ async function main() {
         const orgId = p.split('/')[3];
         const k = callerKey(req);
         try { auth.requireRole(k, orgId, 'admin'); } catch (e) { return fail(e); }
-        return ok(200, { keys: getStore().byOrg('apikeys', orgId).map(({ hash, ...r }) => r) });
+        const keys = getStore().byOrg('apikeys', orgId).map(k => ({
+          id: k.id, key_id: k.key_id, org_id: k.org_id, role: k.role, name: k.name,
+          expires_at: k.expires_at || null, last_used: k.last_used || null,
+          revoked: !!k.revoked, created_at: k.created_at || null
+        }));
+        return ok(200, { keys });
       }
       if (/^\/v1\/orgs\/[^/]+\/keys\/rotate$/.test(p) && req.method === 'POST') {
         const orgId = p.split('/')[3];
@@ -531,8 +574,15 @@ async function main() {
           auth.requireRole(callerKey(req), cur.org_id, 'admin');
           if (!LIFECYCLE.includes(b.status)) throw Object.assign(new Error('invalid status'), { code: 'bad_request' });
           const pass = await setPassportStatus(id, b.status);
-          audit.append({ org_id: pass.org_id, actor: callerKey(req)?.id || 'admin', action: `passport.${b.status}`, resource: id, decision: 'allow', risk: 5, policy_id: null, reasons: [b.reason || b.status], request_id: req._rid });
-          return ok(200, pass);
+          let revocation = null;
+          if (b.status === 'revoked' && !getStore().has('revocations', 'passport:' + id)) {
+            revocation = addRevocation({ type: 'passport', target: id, org_id: pass.org_id, reason: b.reason || 'status:revoked' });
+          }
+          audit.append({
+            org_id: pass.org_id, actor: callerKey(req)?.id || 'admin', action: `passport.${b.status}`, resource: id, decision: 'allow', risk: 5, policy_id: null,
+            reasons: [b.reason || b.status, ...(revocation ? [`revocation_seq:${revocation.seq}`] : [])], request_id: req._rid
+          });
+          return ok(200, { ...pass, revocation_seq: revocation?.seq || null });
         } catch (e) { return fail(e); }
       }
       if (/^\/v1\/passports\/[^/]+\/keys\/revoke$/.test(p) && req.method === 'POST') {
