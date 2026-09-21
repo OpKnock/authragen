@@ -115,6 +115,21 @@ curl -X POST localhost:8787/v1/authorize \
 - Recorded as `authn: "service_key:<key_id>"`
 - Still validates intent signature if provided
 
+
+## OIDC Federation
+
+OIDC bearer identities can be mapped into AuthraGen RBAC principals. Configure `AUTHRA_OIDC_ISSUER`,
+`AUTHRA_OIDC_CLIENT_ID`, and an organization mapping via `AUTHRA_OIDC_ORG_CLAIM` or
+`AUTHRA_OIDC_ORG_ID`. The gateway discovers JWKS from the issuer and validates issuer, signature,
+algorithm, audience, `azp`, expiry and issued-at claims before mapping the configured role claim.
+See [Federation](/api/federation).
+
+## SPIFFE / SPIRE
+
+JWT-SVID bearer authentication can be enabled with `AUTHRA_SPIFFE_AUDIENCE`,
+`AUTHRA_SPIFFE_JWKS_FILE`, `AUTHRA_SPIFFE_ORG_ID` and `AUTHRA_SPIFFE_ROLE`. The adapter also
+validates X.509-SVIDs against a configured SPIFFE trust bundle. See [Federation](/api/federation).
+
 ## CORS
 
 Configure via `AUTHRA_CORS`:
