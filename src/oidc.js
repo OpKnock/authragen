@@ -82,7 +82,7 @@ class OidcVerifier {
   constructor({ issuer, clientId, audience = clientId, roleClaim = 'roles', orgClaim = 'org_id', staticOrgId = null, roleMap = {}, defaultRole = 'reporter', clockSkewSec = 30, discovery = null, jwks = null } = {}) {
     if (!issuer || !clientId) throw new Error('OIDC issuer and clientId are required');
     const u = assertHttps(issuer, 'OIDC issuer');
-    this.issuer = u.toString().replace(//$/, '');
+    this.issuer = u.toString().replace(/\/$/, '');
     this.clientId = clientId;
     this.audience = audience || clientId;
     this.roleClaim = roleClaim;
