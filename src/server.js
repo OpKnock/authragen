@@ -381,6 +381,8 @@ async function main() {
     await initSigners(KMS_TYPE);
     await oidc.initFromEnv();
     await spiffe.initFromEnv();
+    await oidc.initFromEnv();
+    await spiffe.initFromEnv();
     logger.info({ event: 'store_initialized', backend: storeBackend(), kms: KMS_TYPE });
   } catch (e) {
     logger.error({ event: 'init_failed', error: e.message });
