@@ -337,6 +337,17 @@ function tokenCovers(tok,action,resource,destination='') {
   const targetOk=!targets.length||anyMatch(targets,destination);
   return scopeOk&&resourceOk&&targetOk;
 }
+async function checkBudgetFresh(tok, amount_cents) {
+  if (!tok) throw code('bad_request','no token for budget check');
+  const amount=Number(amount_cents)||0;
+  const limit=tok.constraints?.max_spend_cents??Number.MAX_SAFE_INTEGER;
+  const store=_store();
+  const remoteSpend=typeof store.getTokenSpend === 'function' ? await store.getTokenSpend(tok.jti) : null;
+  const spent=remoteSpend == null ? Number(tok.spent_cents||0) : Number(remoteSpend);
+  if(!Number.isSafeInteger(amount)||amount<0||!Number.isSafeInteger(spent)||spent<0||spent+amount>limit)throw code('budget_exceeded','exceeds token spend cap');
+  return { spent_cents: spent, remaining_cents: limit-spent };
+}
+
 function checkBudget(tok,amount_cents) {
   if(!tok)throw code('bad_request','no token for budget check');
   const amount=Number(amount_cents)||0, limit=tok.constraints?.max_spend_cents??Number.MAX_SAFE_INTEGER;
