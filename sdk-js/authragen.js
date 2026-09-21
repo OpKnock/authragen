@@ -4,6 +4,7 @@
 // package should bundle those two files alongside this one.
 const crypto = require('node:crypto');
 const { canonical, sha256hex, rid, b64uEncode, b64uDecode, pubKeyFromB64u, pubKeyFromWire, verifyBytes, privKeyFromB64u } = require('../src/crypto');
+const pq = require('../src/pq');
 
 function jwkPub(x) { return crypto.createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x }, format: 'jwk' }); }
 function jwkPriv(x, d) { return crypto.createPrivateKey({ key: { kty: 'OKP', crv: 'Ed25519', x, d }, format: 'jwk' }); }
@@ -104,6 +105,12 @@ class AuthraGen {
   revoked(org_id, since = 0) { return this._call(`/v1/revoked?org_id=${org_id}&since=${since}`); }
   orgPubkey(org_id) { return this._call(`/v1/orgs/${org_id}/pubkey`); }
   verifyOffline(envelope, org_id) { return this._call('/v1/verify', 'POST', { envelope, org_id }); }
+  // ---- post-quantum credentials (Node 24.7+ for ML-DSA) ----
+  generatePqKeypair(level = '65') { return pq.generateKeypair(level); }
+  signPq(data, keypair) { return pq.sign(Buffer.from(typeof data === 'string' ? data : canonical(data)), { alg: keypair.alg }, keypair.seed); }
+  verifyPq(data, signature, keypair) { return pq.verify(Buffer.from(typeof data === 'string' ? data : canonical(data)), signature, keypair.alg, keypair.publicKey); }
+  sealPq(payload, keypair) { return pq.seal(payload, keypair); }
+  openPq(envelope, publicKey) { return pq.open(envelope, publicKey); }
   // ---- offline verify (edge executors): needs ONLY the org pubkey ----
   // Returns { signature_valid, credential_valid, expiry_valid, revocation_freshness, payload, error }.
   static verifyEnvelopeOffline(envelope, orgPubB64u, { expected_aud = null, expected_intent_hash = null } = {}) {
@@ -143,4 +150,5 @@ class AuthraGen {
 //  3. call authorize() and branch on allow/step_up/deny,
 //  4. call execute() with the SAME intent object (hash-checked, once-only).
 // See adapters/*.js for conformant examples and test/conformance.js.
+AuthraGen.pq = pq;
 module.exports = { AuthraGen };
