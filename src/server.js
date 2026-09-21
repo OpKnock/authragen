@@ -304,9 +304,28 @@ async function execute({ action_token, intent, approval, request_id = null }) {
         if (!tokenCovers(tok, ci.action, ci.resource, ci.destination)) throw Object.assign(new Error('Token scope/targets insufficient'), { code: 'scope_insufficient' });
         checkBudget(tok, ci.amount_cents);
       }
-      if (!await nonceStore.consumeOnce(ci.org_id + ':' + ci.nonce, 10 * 60 * 1000)) throw Object.assign(new Error('intent nonce already used (replay)'), { code: 'replay' });
-      if (!await nonceStore.consumeActionJTI(att.jti, 10 * 60 * 1000)) throw Object.assign(new Error('action token already used (replay)'), { code: 'replay' });
-      if (tok) debitBudget(tok, ci.amount_cents);
+      const atomicStore = getStore();
+      if (typeof atomicStore.checkAndDebitExecution === 'function') {
+        const limit = tok ? (tok.constraints?.max_spend_cents ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+        const reservation = await atomicStore.checkAndDebitExecution(
+          ci.org_id, ci.nonce, att.jti, tok?.jti || null, ci.amount_cents, limit, 10 * 60 * 1000
+        );
+        if (!reservation) {
+          if (!await nonceStore.consumeOnce(ci.org_id + ':' + ci.nonce, 10 * 60 * 1000)) throw Object.assign(new Error('intent nonce already used (replay)'), { code: 'replay' });
+          if (!await nonceStore.consumeActionJTI(att.jti, 10 * 60 * 1000)) throw Object.assign(new Error('action token already used (replay)'), { code: 'replay' });
+          if (tok) debitBudget(tok, ci.amount_cents);
+        } else if (!reservation.success) {
+          const code = reservation.error === 'budget_exceeded' ? 'budget_exceeded' : 'replay';
+          throw Object.assign(new Error(reservation.error || 'execution reservation rejected'), { code });
+        } else if (tok) {
+          tok.spent_cents = reservation.current;
+          getStore().put('tokens', tok);
+        }
+      } else {
+        if (!await nonceStore.consumeOnce(ci.org_id + ':' + ci.nonce, 10 * 60 * 1000)) throw Object.assign(new Error('intent nonce already used (replay)'), { code: 'replay' });
+        if (!await nonceStore.consumeActionJTI(att.jti, 10 * 60 * 1000)) throw Object.assign(new Error('action token already used (replay)'), { code: 'replay' });
+        if (tok) debitBudget(tok, ci.amount_cents);
+      }
       touchLastSeen(ci.passport_id);
       const rc = audit.append({ org_id: ci.org_id, actor: ci.passport_id, action: ci.action, resource: ci.resource, token_jti: att.token_jti, intent_hash: hash, amount_cents: ci.amount_cents, destination: ci.destination, aud: ci.aud, decision: 'executed', risk: 0, policy_id: null, reasons: [`action_jti:${att.jti}`, 'intent-match', 'nonce-consumed', `approval:${approvalRec ? approvalRec.by + '/' + (approvalRec.by_key_id || '') : 'n/a'}`, `executor:${approvalRec ? 'approval-bound' : 'direct'}`], action_jti: att.jti, approval_id: approvalRec?.approval_id || null, request_id: rid });
       return { ok: true, receipt: rc, intent_hash: hash, request_id: rid, prepared_vs_executed: 'executed' };
