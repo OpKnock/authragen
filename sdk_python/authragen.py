@@ -4,6 +4,8 @@ import json, urllib.request, urllib.error, secrets, time, base64, hashlib
 
 try:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives import serialization
     _HAS_ED = True
 except ImportError:
@@ -120,25 +122,40 @@ class AuthraGen:
     def verify_envelope_offline(envelope, org_pub_b64u, expected_aud=None, expected_intent_hash=None):
         out = {"signature_valid": False, "credential_valid": False, "expiry_valid": False, "revocation_freshness": "unknown", "payload": None, "error": None}
         try:
-            if not _HAS_ED: raise RuntimeError("pip install cryptography for offline verify")
+            if not _HAS_ED:
+                raise RuntimeError("pip install cryptography for offline verify")
             parts = envelope.split(".")
-            assert len(parts) == 4 and parts[0] == "AR1", "not an AR1 envelope"
+            if len(parts) != 4 or parts[0] != "AR1":
+                raise ValueError("not an AR1 envelope")
             _, h, p, s = parts
-            Ed25519PublicKey.from_public_bytes(_b64u_decode(org_pub_b64u)).verify(_b64u_decode(s), f"{h}.{p}".encode())
+            header = json.loads(_b64u_decode(h).decode())
+            if header.get("typ") != "AR1" or header.get("v") != 1 or header.get("alg") not in ("EdDSA", "ES256"):
+                raise ValueError("token_malformed")
+            signed = f"{h}.{p}".encode()
+            signature = _b64u_decode(s)
+            raw_pub = _b64u_decode(org_pub_b64u)
+            if header["alg"] == "EdDSA":
+                if len(raw_pub) != 32:
+                    raise ValueError("invalid Ed25519 public key")
+                Ed25519PublicKey.from_public_bytes(raw_pub).verify(signature, signed)
+            else:
+                pub = serialization.load_der_public_key(raw_pub)
+                if not isinstance(pub, ec.EllipticCurvePublicKey):
+                    raise ValueError("invalid ES256 public key")
+                pub.verify(signature, signed, ec.ECDSA(hashes.SHA256()))
             out["signature_valid"] = True
             payload = json.loads(_b64u_decode(p).decode())
             out["payload"] = payload
-            if not all(payload.get(f) for f in ("jti", "issuer", "aud", "iat", "exp")):
+            if not all(payload.get(f) is not None for f in ("jti", "issuer", "aud", "iat", "exp")):
                 out["error"] = "token_malformed"; return out
             if payload.get("issuer") != "authragen-gateway":
                 out["error"] = "issuer_mismatch"; return out
-            if expected_aud and payload.get("aud") not in (expected_aud, "authragen"):
+            if expected_aud and payload.get("aud") != expected_aud:
                 out["error"] = "audience_mismatch"; return out
             if expected_intent_hash and payload.get("intent_hash") != expected_intent_hash:
                 out["error"] = "intent_mismatch"; return out
             out["credential_valid"] = True
-            import time as _t
-            out["expiry_valid"] = int(_t.time() * 1000) <= payload["exp"]
+            out["expiry_valid"] = int(time.time() * 1000) <= payload["exp"]
             if not out["expiry_valid"]: out["error"] = "token_expired"
             return out
         except Exception as e:
