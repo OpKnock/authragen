@@ -16,7 +16,7 @@ services:
       - AUTHRA_DATA=/app/data
       - AUTHRA_CORS=*
       - AUTHRA_TRUST_PROXY=1
-      - AUTHRA_BODY_LIMIT=256kb
+      - AUTHRA_BODY_LIMIT=262144
     volumes:
       - .:/app
       - /app/node_modules
