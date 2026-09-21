@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, release/**]
+    branches: [master, main, release/**]
   pull_request:
-    branches: [main]
+    branches: [master, main]
   release:
     types: [published]
 
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: pip install -q pytest httpx
+      - run: pip install -q pytest httpx cryptography -e sdk_python/
       - run: python -m pytest sdk_python/ -v
         env:
           AUTHRA_DATA: ${{ runner.temp }}/authragen-test
@@ -105,7 +105,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
       - run: npm ci
-      - run: npm pack --dry-run
+      - run: npm pack
       - uses: actions/upload-artifact@v4
         with:
           name: npm-package
@@ -129,7 +129,7 @@ jobs:
         run: |
           docker run -d --name authragen-test -p 8787:8787 authragen:test
           sleep 5
-          curl -f http://localhost:8787/health
+          curl -f http://localhost:8787/v1/health
           docker logs authragen-test
           docker stop authragen-test
 
@@ -156,7 +156,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install -q build twine
+      - run: pip install -q build twine cryptography -e sdk_python/
       - run: python -m build sdk_python/
       - run: twine upload sdk_python/dist/*
         env:
