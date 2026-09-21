@@ -267,7 +267,7 @@ async function waitHealth(base, tries = 60) {
     }
 
     // --- delegation: authority + attenuation + targets ---
-    const t0 = await admin.delegate({ org_id, delegator_id: a.id, delegatorPriv: aK, scope: ['data.read'], resources: ['x:*'], constraints: { max_spend_cents: 500, allowed_targets: ['x:*'] } });
+    const t0 = await admin.delegate({ org_id, delegator_id: a.id, delegatorPriv: aK, scope: ['data.read'], resources: ['x:*'], constraints: { max_spend_cents: 500, allowed_targets: ['x:*'], not_after: Date.now() + 7 * 86400000 } });
     ok(t0.depth === 0, 'root delegation depth 0');
     const t1 = await admin.delegate({ org_id, delegator_id: a.id, delegatorPriv: aK, scope: ['data.read'], resources: ['x:*'], constraints: { max_spend_cents: 100 }, parent_jti: t0.id });
     ok(t1.depth === 1, 'chained delegation narrows');

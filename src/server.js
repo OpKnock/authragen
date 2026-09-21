@@ -818,6 +818,7 @@ async function main() {
         const v = verifyOffline(envelope, opk, {});
         if (!v.signature_valid) throw Object.assign(new Error('envelope signature invalid'), { code: 'sig_invalid' });
         if (!v.credential_valid) throw Object.assign(new Error(v.error || 'credential invalid'), { code: 'token_malformed' });
+        if (v.payload.org_id !== org_id) throw Object.assign(new Error('credential organization mismatch'), { code: 'token_mismatch' });
         let freshness = 'unknown (offline: poll GET /v1/revoked)';
         try {
           const live = v.payload.kind === 'action' && (getStore().has('revocations', 'action:' + v.payload.jti) || getStore().has('revocations', 'token:' + (v.payload.token_jti || '')));

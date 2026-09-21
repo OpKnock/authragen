@@ -259,7 +259,7 @@ function registerDelegation({ org_id, delegator_id, payload, envelope, callerIsA
   if(parentJti){
     parentToken=_store().get('tokens',parentJti);
     if(!parentToken||parentToken.org_id!==org_id)throw code('forbidden','parent delegation not in this org');
-    if(parentToken.sub!==delegator_id)throw code('forbidden','delegator does not own parent delegation');
+    if(parentToken.sub!==delegator_id)throw code('delegation_not_authorized','parent delegation is not owned by delegator');
     assertTokenUsable(parentToken);
     const c=verified.constraints||{}, has=k=>Object.prototype.hasOwnProperty.call(c,k);
     const childScope=Array.isArray(verified.scope)?verified.scope:(parentToken.scope||[]);

@@ -12,6 +12,11 @@ env:
   NODE_VERSION: '22.x'
   PYTHON_VERSION: '3.12'
 
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
 jobs:
   lint-and-typecheck:
     name: Lint & Typecheck
