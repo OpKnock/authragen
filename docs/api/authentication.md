@@ -57,7 +57,7 @@ GET /v1/verify?envelope=...&org_id=...
 curl -X POST localhost:8787/v1/orgs/org_abc/keys/rotate \
   -H "Authorization: Bearer ${AUTHRA_ADMIN_KEY}" \
   -H "Content-Type: application/json" \
-  -d '{"key_id": "ak_exec_abc123"}'
+  -d '{"key_id": "${AUTHRA_KEY_ID}"}'
 ```
 
 - Old key immediately revoked
