@@ -53,6 +53,18 @@ async function waitHealth(base, tries = 60) {
     const h = await anon._call('/v1/health');
     ok(h.ok && h.v === 2, 'gateway v2 healthy', JSON.stringify(h).slice(0, 120));
     ok(!!h.request_id, 'health carries request_id');
+
+    // Production mode refuses unsafe file-backed defaults unless explicitly opted in.
+    {
+      const prod = cp.spawn(process.execPath, [path.join(__dirname, '..', 'src', 'server.js')], {
+        env: { ...process.env, NODE_ENV: 'production', AUTHRA_DATA: fs.mkdtempSync(path.join(os.tmpdir(), 'authragen-prod-')), AUTHRA_STORE: 'file', AUTHRA_KMS: 'file', PORT: String(19000 + Math.floor(Math.random() * 500)) },
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      const exited = await new Promise(resolve => { const timer=setTimeout(()=>resolve(false),1500); prod.once('exit', code=>{ clearTimeout(timer); resolve(code !== 0); }); });
+      try { prod.kill('SIGTERM'); } catch {}
+      ok(exited, 'production refuses insecure file defaults without explicit opt-in');
+    }
+
     // External KMS factories must receive options, not the file data directory positional argument.
     {
       const { createSigner } = require('../src/kms');

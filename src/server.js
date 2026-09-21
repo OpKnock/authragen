@@ -38,6 +38,8 @@ const TRUST_PROXY = process.env.AUTHRA_TRUST_PROXY === '1';
 const RISK_CEILING_DEFAULT = Number(process.env.AUTHRA_RISK_CEILING || 85);
 const RISK_STEPUP_DEFAULT = Number(process.env.AUTHRA_RISK_STEPUP || 30);
 const KMS_TYPE = (process.env.AUTHRA_KMS || 'file').toLowerCase();
+const STORE_TYPE = (process.env.AUTHRA_STORE || 'file').toLowerCase();
+const ALLOW_INSECURE_PROD_DEFAULTS = process.env.AUTHRA_ALLOW_INSECURE_PROD_DEFAULTS === '1';
 
 const logger = createLogger({ service: 'authragen', env: process.env.NODE_ENV || 'development' });
 const metrics = createMetrics();
@@ -327,6 +329,10 @@ function addRevocation({ type, target, reason, org_id, kid = null }) {
 
 async function main() {
   try {
+    if (IS_PROD && !ALLOW_INSECURE_PROD_DEFAULTS) {
+      if (KMS_TYPE === 'file') throw new Error('production requires AUTHRA_KMS to be a real KMS/HSM backend (or explicitly set AUTHRA_ALLOW_INSECURE_PROD_DEFAULTS=1 for a non-production demo)');
+      if (!['postgres', 'redis'].includes(STORE_TYPE)) throw new Error('production requires AUTHRA_STORE=postgres or redis (or explicitly set AUTHRA_ALLOW_INSECURE_PROD_DEFAULTS=1 for a non-production demo)');
+    }
     await initStore();
     await initSigners(KMS_TYPE);
     logger.info({ event: 'store_initialized', backend: storeBackend(), kms: KMS_TYPE });

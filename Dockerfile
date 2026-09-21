@@ -31,9 +31,6 @@ COPY --chown=authragen:authragen src/ ./src/
 COPY --chown=authragen:authragen sdk-js/ ./sdk-js/
 COPY --chown=authragen:authragen sdk_python/ ./sdk_python/
 COPY --chown=authragen:authragen adapters/ ./adapters/
-COPY --chown=authragen:authragen examples/ ./examples/
-COPY --chown=authragen:authragen test/ ./test/
-COPY --chown=authragen:authragen .gitignore ./
 COPY --chown=authragen:authragen README.md ./
 COPY --chown=authragen:authragen LICENSE* ./
 
