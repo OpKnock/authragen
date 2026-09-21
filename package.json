@@ -28,7 +28,8 @@
     "security:deps": "npx depcheck",
     "bench": "node test/bench.js",
     "docs:dev": "npx vitepress dev docs",
-    "docs:build": "npx vitepress build docs"
+    "docs:build": "npx vitepress build docs",
+    "test:audit": "node test/audit_persistent.js"
   },
   "engines": {
     "node": ">=22.13.0"
