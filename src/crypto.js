@@ -133,7 +133,12 @@ function pubKeyFromB64u(x) {
 }
 function pubKeyFromWire(value, alg = 'EdDSA') {
   if (alg === 'EdDSA') return pubKeyFromB64u(value);
-  if (alg === 'ES256') return crypto.createPublicKey({ key: Buffer.from(String(value), 'base64url'), format: 'der', type: 'spki' });
+  if (alg === 'ES256') {
+    const key = crypto.createPublicKey({ key: Buffer.from(String(value), 'base64url'), format: 'der', type: 'spki' });
+    const curve = key.asymmetricKeyDetails?.namedCurve;
+    if (curve && curve !== 'prime256v1') throw err('token_malformed', 'ES256 requires P-256');
+    return key;
+  }
   throw err('token_malformed', 'unsupported credential algorithm');
 }
 function verifyBytes(data, signatureB64u, pubKey, alg = 'EdDSA') {
