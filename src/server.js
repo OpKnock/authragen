@@ -15,6 +15,8 @@ const { getOrgSigner, gatewaySigner, initSigners } = require('./signer');
 const { canonicalIntent, intentHash, checkIntentShape, verifyAgentIntent, openWithOrgKey,
   buildActionToken, buildApproval, verifyOffline, PROTOCOL_VERSION } = require('./intent');
 const { hasDuplicateKeys } = require('./crypto');
+const oidc = require('./oidc');
+const spiffe = require('./spiffe-runtime');
 const { createLogger } = require('./logger');
 const { createMetrics } = require('./metrics');
 const nonceStore = require('./nonce');
@@ -377,6 +379,8 @@ async function main() {
     await initStore();
     audit.configureStore(getStore());
     await initSigners(KMS_TYPE);
+    await oidc.initFromEnv();
+    await spiffe.initFromEnv();
     logger.info({ event: 'store_initialized', backend: storeBackend(), kms: KMS_TYPE });
   } catch (e) {
     logger.error({ event: 'init_failed', error: e.message });
