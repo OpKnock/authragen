@@ -77,14 +77,18 @@ versioned feed, hash-chained receipts + signed checkpoints, offline verifier, MC
 adapters, JS + Python SDKs, control-plane dashboard.
 
 **Production deployment requirements:**
-Use a real KMS/HSM via `AUTHRA_KMS` and a durable Postgres/Redis backend. The gateway waits
-for persistent-store writes before returning successful responses. Postgres/Redis-backed gateways refresh the generic state mirror from the persistent source at each API request boundary, so ordinary control-plane reads do not remain permanently instance-local. Replay and token-spend reservations remain backend-atomic; the request sees a remote-refreshed control-plane state for the duration of that request. Use HTTPS behind a trusted
+Use a real KMS/HSM via `AUTHRA_KMS` and a durable Postgres/Redis backend. Control-plane state,
+audit receipts, and checkpoints are persisted through the configured durable backend. The gateway
+waits for persistent-store writes before returning successful responses. Postgres/Redis-backed gateways refresh the generic state mirror from the persistent source at each API request boundary, so ordinary control-plane reads do not remain permanently instance-local. Replay and token-spend reservations remain backend-atomic; the request sees a remote-refreshed control-plane state for the duration of that request. Use HTTPS behind a trusted
 proxy (`AUTHRA_TRUST_PROXY=1`), exact `AUTHRA_CORS` origins, bounded request bodies, tuned
 rate limits and fresh revocation-feed polling for offline verifiers.
 
-**Roadmap:**
-OIDC federation, richer external transparency-log integrations, formal interoperability
-certification, and cross-instance state synchronization are future work.
+**Validation & roadmap:**
+The repository includes centralized audit persistence, distributed atomicity tests, two-instance
+HTTP validation, and a concurrent load harness. The gated KMS integration workflow exercises
+real AWS/GCP/Azure credentials when configured and a real Vault deployment in CI. OIDC federation,
+richer external transparency-log integrations, formal interoperability certification, and
+post-quantum profiles remain post-v1 work.
 
 **Non-goals:**
 No fake global registry claiming authority over all AI agents. Identity alone is not the
