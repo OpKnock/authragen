@@ -23,8 +23,8 @@ services:
       - AUTHRA_CLOCK_SKEW_S=30
       - AUTHRA_RATE_LIMIT_WINDOW_MS=60000
       - AUTHRA_RISK_CEILING=80
-      - AUTHRA_KMS=${AUTHRA_KMS:?Set AUTHRA_KMS=aws|gcp|vault|azure for production}
-      - AUTHRA_STORE=${AUTHRA_STORE:?Set AUTHRA_STORE=postgres or redis for production}
+      - AUTHRA_KMS=${AUTHRA_KMS:-file}
+      - AUTHRA_STORE=${AUTHRA_STORE:-file}
       - DATABASE_URL=${DATABASE_URL:-}
       - REDIS_URL=${REDIS_URL:-}
     volumes:
