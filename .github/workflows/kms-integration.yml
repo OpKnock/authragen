@@ -1,0 +1,115 @@
+name: Real KMS Integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aws:
+    if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' && secrets.AUTHRA_AWS_KMS_ORG_KEY_ID != '' && secrets.AUTHRA_AWS_KMS_CHECKPOINT_KEY_ID != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: npm
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Verify AWS KMS signer
+        env:
+          AUTHRA_KMS: aws
+          AUTHRA_AWS_KMS_ORG_KEY_ID: ${{ secrets.AUTHRA_AWS_KMS_ORG_KEY_ID }}
+          AUTHRA_AWS_KMS_CHECKPOINT_KEY_ID: ${{ secrets.AUTHRA_AWS_KMS_CHECKPOINT_KEY_ID }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: node test/kms_smoke.js
+
+  gcp:
+    if: ${{ secrets.GCP_WIF_PROVIDER != '' && secrets.GCP_SERVICE_ACCOUNT != '' && secrets.GCP_PROJECT_ID != '' && secrets.AUTHRA_GCP_KMS_ORG_KEY_RING != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: npm
+      - run: npm ci
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Verify GCP KMS signer
+        env:
+          AUTHRA_KMS: gcp
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          AUTHRA_GCP_KMS_LOCATION: ${{ secrets.AUTHRA_GCP_KMS_LOCATION }}
+          AUTHRA_GCP_KMS_ORG_KEY_RING: ${{ secrets.AUTHRA_GCP_KMS_ORG_KEY_RING }}
+          AUTHRA_GCP_KMS_ORG_KEY_NAME: ${{ secrets.AUTHRA_GCP_KMS_ORG_KEY_NAME }}
+          AUTHRA_GCP_KMS_CHECKPOINT_KEY_RING: ${{ secrets.AUTHRA_GCP_KMS_CHECKPOINT_KEY_RING }}
+          AUTHRA_GCP_KMS_CHECKPOINT_KEY_NAME: ${{ secrets.AUTHRA_GCP_KMS_CHECKPOINT_KEY_NAME }}
+        run: node test/kms_smoke.js
+
+  azure:
+    if: ${{ secrets.AZURE_CLIENT_ID != '' && secrets.AZURE_TENANT_ID != '' && secrets.AZURE_SUBSCRIPTION_ID != '' && secrets.AUTHRA_AZURE_KEYVAULT_URL != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: npm
+      - run: npm ci
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Verify Azure Key Vault signer
+        env:
+          AUTHRA_KMS: azure
+          AUTHRA_AZURE_KEYVAULT_URL: ${{ secrets.AUTHRA_AZURE_KEYVAULT_URL }}
+          AUTHRA_AZURE_ORG_KEY_NAME: ${{ secrets.AUTHRA_AZURE_ORG_KEY_NAME }}
+          AUTHRA_AZURE_CHECKPOINT_KEY_NAME: ${{ secrets.AUTHRA_AZURE_CHECKPOINT_KEY_NAME }}
+        run: node test/kms_smoke.js
+
+  vault:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: npm
+      - run: npm ci
+      - name: Start Vault
+        run: |
+          docker run -d --name authragen-vault -p 8200:8200 -e VAULT_DEV_ROOT_TOKEN_ID=authragen-ci-root -e VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200 hashicorp/vault:2.1.1 server -dev
+          for i in $(seq 1 30); do curl -fsS -H 'X-Vault-Token: authragen-ci-root' http://127.0.0.1:8200/v1/sys/health && break; sleep 1; done
+      - name: Configure Transit keys
+        run: |
+          curl -fsS -X POST -H 'X-Vault-Token: authragen-ci-root' -H 'Content-Type: application/json' --data '{"type":"transit"}' http://127.0.0.1:8200/v1/sys/mounts/transit || true
+          curl -fsS -X POST -H 'X-Vault-Token: authragen-ci-root' -H 'Content-Type: application/json' --data '{"type":"ecdsa-p256"}' http://127.0.0.1:8200/v1/transit/keys/authragen-org
+          curl -fsS -X POST -H 'X-Vault-Token: authragen-ci-root' -H 'Content-Type: application/json' --data '{"type":"ecdsa-p256"}' http://127.0.0.1:8200/v1/transit/keys/authragen-checkpoint
+      - name: Verify Vault signer
+        env:
+          AUTHRA_KMS: vault
+          VAULT_ADDR: http://127.0.0.1:8200
+          VAULT_TOKEN: authragen-ci-root
+          AUTHRA_VAULT_ORG_KEY: transit/keys/authragen-org
+          AUTHRA_VAULT_CHECKPOINT_KEY: transit/keys/authragen-checkpoint
+        run: node test/kms_smoke.js
