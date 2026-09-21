@@ -31,10 +31,10 @@ AuthraGen implements defense in depth:
 
 ### Authentication & Authorization
 - Org-scoped API keys with RBAC (admin > approver > executor > reporter)
-- Ed25519 signatures for all credentials
+- Ed25519 agent/passport signatures plus gateway EdDSA/ES256 envelopes and optional ML-DSA credentials
 - Audience-bound tokens (prevents cross-service replay)
 - Single-use action credentials with nonce replay protection
-- Short TTLs (configurable, default 2min intent / 5min action / 1hr approval)
+- Short TTLs (configurable; defaults are enforced by protocol configuration)
 
 ### Cryptography
 - Ed25519 for agent/passport signatures
