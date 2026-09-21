@@ -54,7 +54,9 @@ function normParams(v) {
       const o = {};
       for (const k of keys) {
         if (typeof k !== 'string' || k.length > 128) throw code('bad_intent', 'params key invalid');
-        o[k.normalize('NFC')] = norm(x[k]);
+        const nk = k.normalize('NFC');
+        if (Object.prototype.hasOwnProperty.call(o, nk)) throw code('bad_intent', 'params keys collide after Unicode normalization');
+        o[nk] = norm(x[k]);
       }
       return o;
     }
