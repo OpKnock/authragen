@@ -380,11 +380,11 @@ async function waitHealth(base, tries = 60) {
     // Already-issued action credentials must become unusable when their passport key is revoked.
     {
       const ck = admin.generateKeypair();
-      const cp = await admin.issuePassport(org_id, 'cred-key-' + Date.now().toString(36), { pubkey: ck.pub });
-      const ci = me.intent({ passport_id: cp.id, org_id, action: 'data.read', resource: 'credential-key:1' });
+      const cpPass = await admin.issuePassport(org_id, 'cred-key-' + Date.now().toString(36), { pubkey: ck.pub });
+      const ci = me.intent({ passport_id: cpPass.id, org_id, action: 'data.read', resource: 'credential-key:1' });
       const cd = await me.authorize(ci, me.signIntent(ci, ck));
       ok(cd.decision === 'allow' && !!cd.action_token, 'credential key revocation fixture authorized');
-      await admin._call(`/v1/passports/${cp.id}/keys/revoke`, 'POST', { kid: cp.keys.current.kid, reason: 'post-issue-revocation' });
+      await admin._call(`/v1/passports/${cpPass.id}/keys/revoke`, 'POST', { kid: cpPass.keys.current.kid, reason: 'post-issue-revocation' });
       await throwsAsync(() => me.execute(cd.action_token, ci), /key_revoked|unknown_kid|revoked|credential key is no longer valid/, 'issued action credential invalidated by key revocation');
     }
 
