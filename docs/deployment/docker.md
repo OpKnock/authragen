@@ -196,13 +196,13 @@ spec:
 
 ## Production Checklist
 
-> The current control-plane mirror keeps authoritative reads in process memory. Run one gateway instance per state store unless you add an external cross-instance coordination layer.
+> Postgres/Redis deployments refresh the generic control-plane state from the persistent source at each API request boundary. This supports multi-instance gateways without permanently stale in-process control-plane reads; strict linearizability for concurrent administrative mutations is still outside the current scope.
 
 - [ ] **HTTPS/TLS** - Terminate at ingress/load balancer, `AUTHRA_TRUST_PROXY=1`
 - [ ] **CORS** - `AUTHRA_CORS` set to exact origins (not `*`)
 - [ ] **KMS** - `AUTHRA_KMS=aws|gcp|vault|azure` (not file-backed)
 - [ ] **Anchor** - `AUTHRA_ANCHOR_URL` configured for transparency log
-- [ ] **Storage** - Postgres/Redis for durable records, replay protection and atomic token-spend reservation; keep one gateway instance until cross-instance authoritative control-plane reads are coordinated
+- [ ] **Storage** - Postgres/Redis for durable records, replay protection and atomic token-spend reservation; remote-backed control-plane state is refreshed at every API request
 - [ ] **Secrets** - No secrets in images/configmaps; use Vault/SealedSecrets
 - [ ] **Monitoring** - `/health` + `/metrics` (Prometheus) scraped
 - [ ] **Logging** - Structured JSON logs to centralized system
@@ -241,9 +241,8 @@ spec:
 const pg = require('pg');
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
-// The current gateway uses the generic durable-record mirror for control-plane state.
-// Replay primitives are backed by the adapter; audit/checkpoint data remains file-backed.
-// Cross-instance token-budget atomicity is not yet implemented.
+// The gateway refreshes generic control-plane state from Postgres at each API request boundary.
+// Replay and token-spend reservation are adapter-backed and atomic; audit/checkpoint files remain local.
 ```
 
 ## Redis Adapter (Production)
@@ -255,8 +254,8 @@ const redis = new Redis(process.env.REDIS_URL);
 
 // Nonce: SET nonce:{org}:{nonce} EX 3600 NX
 // Action JTI: SET action:{jti} EX 3600 NX
-// Distributed replay uses Redis atomic primitives. Token spend state is currently mirror-backed,
-// so run one gateway instance until cross-instance budget coordination is added.
+// The gateway refreshes generic control-plane state from Redis at each API request boundary.
+// Replay and token-spend reservation use Redis atomic primitives.
 ```
 
 ## Monitoring
@@ -266,7 +265,7 @@ const redis = new Redis(process.env.REDIS_URL);
 ```
 GET /health
 ```
-Response includes `ok`, protocol/version, backend, persistence status, timestamp, custody policy, and the request ID.
+Response includes `ok`, protocol/version, backend, persistence status, consistency mode, last remote sync timestamp, custody policy, and the request ID.
 
 ### Metrics (Prometheus)
 
