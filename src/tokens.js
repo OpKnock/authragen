@@ -205,7 +205,7 @@ async function setPassportStatus(id, status) {
   pass.updated_at = Date.now();
   const signer = getOrgSigner(pass.org_id);
   const doc = { ...pass, signature: undefined };
-  pass.signature = signer.signCanonical(doc);
+  pass.signature = await signer.signCanonical(doc);
   _store().put('passports', pass);
   return pass;
 }
