@@ -125,7 +125,7 @@ async function waitHealth(base, tries = 60) {
     // --- secret exposure: GET never returns secrets ---
     {
       const keys = await admin._call(`/v1/orgs/${org_id}/keys`);
-      ok(Array.isArray(keys.keys) && keys.keys.every(k => !k.hash && !k.secret), 'GET keys strips hashes/secrets');
+      ok(Array.isArray(keys.keys) && keys.keys.every(k => !k.hash && !k.secret && !k.secret_hash), 'GET keys never exposes secret material');
     }
 
     // --- blueprints ---
@@ -349,6 +349,17 @@ async function waitHealth(base, tries = 60) {
       ok(dr.decision === 'deny' || dr.error, 'revoked key fails closed');
     }
 
+    // Already-issued action credentials must become unusable when their passport key is revoked.
+    {
+      const ck = admin.generateKeypair();
+      const cp = await admin.issuePassport(org_id, 'cred-key-' + Date.now().toString(36), { pubkey: ck.pub });
+      const ci = me.intent({ passport_id: cp.id, org_id, action: 'data.read', resource: 'credential-key:1' });
+      const cd = await me.authorize(ci, me.signIntent(ci, ck));
+      ok(cd.decision === 'allow' && !!cd.action_token, 'credential key revocation fixture authorized');
+      await admin._call(`/v1/passports/${cp.id}/keys/revoke`, 'POST', { kid: cp.keys.current.kid, reason: 'post-issue-revocation' });
+      await throwsAsync(() => me.execute(cd.action_token, ci), /key_revoked|unknown_kid|revoked|credential key is no longer valid/, 'issued action credential invalidated by key revocation');
+    }
+
     // --- lifecycle: suspend/quarantine reversible; revoke terminal + cascade ---
     {
       const lk = admin.generateKeypair();
@@ -363,6 +374,20 @@ async function waitHealth(base, tries = 60) {
       const is3 = me.intent({ passport_id: lp.id, org_id, action: 'data.read', resource: 'x:1' });
       ok((await me.authorize(is3, me.signIntent(is3, lk))).decision === 'deny', 'quarantined agent fails closed');
       await admin.setAgentStatus(lp.id, 'active', 'test');
+    }
+
+    // Direct status revocation must also update the revocation feed.
+    {
+      const dk = admin.generateKeypair();
+      const dp = await admin.issuePassport(org_id, 'direct-revoke-' + Date.now().toString(36), { pubkey: dk.pub });
+      const before = await admin._call(`/v1/revoked?org_id=${org_id}`);
+      const updated = await admin.setAgentStatus(dp.id, 'revoked', 'direct status revoke');
+      ok(typeof updated.signature === 'string', 'passport lifecycle update keeps a real signature');
+      const after = await admin._call(`/v1/revoked?org_id=${org_id}&since_seq=${before.head_seq}`);
+      ok((after.revocations || []).some(x => x.id === 'passport:' + dp.id), 'direct revoked status appears in revocation feed');
+      const di = me.intent({ passport_id: dp.id, org_id, action: 'data.read', resource: 'direct-revoke:1' });
+      const dd = await me.authorize(di, me.signIntent(di, dk)).catch(e => e.body || {});
+      ok(dd.decision === 'deny' || dd.error, 'direct revoked status fails closed');
     }
 
     // --- revocation cascade + checkpoints + freshness ---
@@ -451,7 +476,8 @@ async function waitHealth(base, tries = 60) {
       const v = AuthraGen.verifyEnvelopeOffline(dd.action_token, opk);
       ok(v.signature_valid && v.credential_valid && v.expiry_valid && v.revocation_freshness === 'unknown', 'offline verifier returns separate validity fields');
       const v2 = AuthraGen.verifyEnvelopeOffline(dd.action_token, opk, { expected_aud: 'wrong-aud' });
-      // default aud is authragen → wildcard passes; craft aud-bound case
+      ok(v2.error === 'audience_mismatch', 'offline verifier rejects default audience for unrelated expected audience');
+      // craft aud-bound case
       const ia = me.intent({ passport_id: pp.id, org_id, action: 'data.read', resource: 'off:2', aud: 'svc-x' });
       const da = await me.authorize(ia, me.signIntent(ia, kk));
       const v3 = AuthraGen.verifyEnvelopeOffline(da.action_token, opk, { expected_aud: 'svc-y' });
