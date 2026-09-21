@@ -73,8 +73,8 @@ Preferred flow: `createAgent() → createIntent() → signIntent() → authorize
 self-custody passports, blueprints, narrowing delegation, exact-intent authorize/execute,
 single-use aud-bound credentials, RBAC management APIs, policy engine (deny-wins,
 empty-means-nothing), deterministic risk triage, quorum approvals, revocation cascade +
-versioned feed, hash-chained receipts + signed checkpoints, offline verifier, MCP/A2A/n8n
-adapters, JS + Python SDKs, control-plane dashboard.
+versioned feed, hash-chained receipts + signed checkpoints, offline verifier, MCP/A2A/n8n adapters, OIDC federation, SPIFFE/SPIRE SVID validation, JS + Python SDKs,
+ML-DSA-44/65/87 post-quantum credentials, and the control-plane dashboard.
 
 **Production deployment requirements:**
 Use a real KMS/HSM via `AUTHRA_KMS` and a durable Postgres/Redis backend. Control-plane state,
@@ -83,12 +83,11 @@ waits for persistent-store writes before returning successful responses. Postgre
 proxy (`AUTHRA_TRUST_PROXY=1`), exact `AUTHRA_CORS` origins, bounded request bodies, tuned
 rate limits and fresh revocation-feed polling for offline verifiers.
 
-**Validation & roadmap:**
+**Validation:**
 The repository includes centralized audit persistence, distributed atomicity tests, two-instance
-HTTP validation, and a concurrent load harness. The gated KMS integration workflow exercises
-real AWS/GCP/Azure credentials when configured and a real Vault deployment in CI. OIDC federation,
-richer external transparency-log integrations, formal interoperability certification, and
-post-quantum profiles remain post-v1 work.
+HTTP validation, a concurrent load harness, OIDC/SPIFFE integration tests, and an ML-DSA test suite.
+The gated KMS workflow exercises real AWS/GCP/Azure credentials when configured and a real Vault
+deployment in CI. The manual soak workflow supports larger sustained runs.
 
 **Non-goals:**
 No fake global registry claiming authority over all AI agents. Identity alone is not the
