@@ -22,7 +22,7 @@ const { createMetrics } = require('./metrics');
 const PORT = process.env.PORT || 8787;
 const IS_PROD = process.env.NODE_ENV === 'production';
 const BODY_LIMIT = Number(process.env.AUTHRA_BODY_LIMIT || 256 * 1024);
-const CORS_ORIGIN = process.env.AUTHRA_CORS || '*';
+const CORS_ORIGIN = process.env.AUTHRA_CORS || '';
 const TRUST_PROXY = process.env.AUTHRA_TRUST_PROXY === '1';
 const RISK_CEILING_DEFAULT = Number(process.env.AUTHRA_RISK_CEILING || 85);
 const RISK_STEPUP_DEFAULT = Number(process.env.AUTHRA_RISK_STEPUP || 30);
@@ -174,7 +174,7 @@ async function authorize({ intent, intent_sig, kid, token_id, context = {}, dry_
       if (!tok || tok.org_id !== ci.org_id) throw Object.assign(new Error('Unknown token'), { code: 'token_unknown' });
       assertTokenUsable(tok);
       if (tok.sub !== ci.passport_id) throw Object.assign(new Error('Token subject mismatch'), { code: 'token_mismatch' });
-      if (!tokenCovers(tok, ci.action, ci.resource)) throw Object.assign(new Error('Token scope/targets insufficient'), { code: 'scope_insufficient' });
+      if (!tokenCovers(tok, ci.action, ci.resource, ci.destination)) throw Object.assign(new Error('Token scope/targets insufficient'), { code: 'scope_insufficient' });
       checkBudget(tok, ci.amount_cents);
     }
   } catch (e) { return deny([e.code || 'token_error'], 100, null); }
@@ -216,7 +216,7 @@ async function authorize({ intent, intent_sig, kid, token_id, context = {}, dry_
   }
   if (ev.provisional === 'allow') {
     const orgSigner = getOrgSigner(ci.org_id);
-    const att = buildActionToken({ orgSigner, org_id: ci.org_id, sub: ci.passport_id, intent_hash: hash, action: ci.action, resource: ci.resource, amount_cents: ci.amount_cents, requires_approval: false, token_jti: token_id || null, aud: ci.aud, kid: kid || pass.keys?.current?.kid || null });
+    const att = await buildActionToken({ orgSigner, org_id: ci.org_id, sub: ci.passport_id, intent_hash: hash, action: ci.action, resource: ci.resource, amount_cents: ci.amount_cents, requires_approval: false, token_jti: token_id || null, aud: ci.aud, kid: kid || pass.keys?.current?.kid || null });
     const rc = audit.append({ ...base, decision: 'allow', risk: risk.score, risk_version: riskCfg.version, policy_id: ev.policy_id, policy_hash: ev.policy_hash, policy_version: ev.policy_version, reasons, action_jti: att.jti, request_id: rid });
     return { decision: 'allow', action_token: att.envelope, action_jti: att.jti, risk: risk.score, risk_factors: risk.factors, policy_id: ev.policy_id, policy_hash: ev.policy_hash, policy_version: ev.policy_version, reasons, receipt: rc, request_id: rid };
   }
@@ -346,7 +346,11 @@ async function main() {
           logLine(200); return res.end(b);
         } catch { return fail(Object.assign(new Error('no console'), { code: 'not_found' })); }
       }
-      if (p === '/v1/health' && req.method === 'GET') return ok(200, { ok: true, service: 'authragen', v: 2, protocol: PROTOCOL_VERSION, time: Date.now(), store: storeBackend(), custody_policy: allowCustody() ? 'dev (server custody ALLOWED)' : 'self-custody enforced' });
+      if ((p === '/v1/health' || p === '/health') && (req.method === 'GET' || req.method === 'HEAD')) {
+        const payload = { ok: true, service: 'authragen', v: 2, protocol: PROTOCOL_VERSION, time: Date.now(), store: storeBackend(), custody_policy: allowCustody() ? 'dev (server custody ALLOWED)' : 'self-custody enforced' };
+        if (req.method === 'HEAD') { logLine(200); res.writeHead(200, securityHeaders(req)); return res.end(); }
+        return ok(200, payload);
+      }
 
       if (p === '/metrics' && req.method === 'GET') {
         try {
@@ -363,7 +367,8 @@ async function main() {
         const id = p.split('/')[3];
         const opk = orgPubkey(id) || getStore().get('orgs', id)?.pubkey;
         if (!opk) return fail(Object.assign(new Error('unknown org'), { code: 'org_unknown' }));
-        return ok(200, { org_id: id, pubkey: opk, alg: 'Ed25519' });
+        const signer = getOrgSigner(id);
+        return ok(200, { org_id: id, pubkey: opk, alg: signer.getAlgorithm ? signer.getAlgorithm() : 'EdDSA' });
       }
       if (p === '/v1/orgs' && req.method === 'POST') {
         rateLimit(req, 'bootstrap', 5);
@@ -415,8 +420,9 @@ async function main() {
         const b = await body(req);
         const org = getStore().get('orgs', orgId);
         if (!org) return fail(Object.assign(new Error('unknown org'), { code: 'org_unknown' }));
-        if (b.risk_ceiling != null) org.risk_ceiling = Math.max(0, Math.min(100, Number(b.risk_ceiling)));
-        if (b.risk_stepup != null) org.risk_stepup = Math.max(0, Math.min(100, Number(b.risk_stepup)));
+        if (b.risk_ceiling != null) { const n = Number(b.risk_ceiling); if (!Number.isInteger(n) || n < 0 || n > 100) throw Object.assign(new Error('risk_ceiling must be an integer 0..100'), { code: 'bad_request' }); org.risk_ceiling = n; }
+        if (b.risk_stepup != null) { const n = Number(b.risk_stepup); if (!Number.isInteger(n) || n < 0 || n > 100) throw Object.assign(new Error('risk_stepup must be an integer 0..100'), { code: 'bad_request' }); org.risk_stepup = n; }
+        if (org.risk_stepup >= org.risk_ceiling) throw Object.assign(new Error('risk_stepup must be below risk_ceiling'), { code: 'bad_request' });
         getStore().put('orgs', org);
         return ok(200, { ok: true, risk_ceiling: org.risk_ceiling, risk_stepup: org.risk_stepup });
       }
@@ -486,7 +492,7 @@ async function main() {
         try {
           if (!b.org_id) throw Object.assign(new Error('org_id required'), { code: 'bad_request' });
           auth.requireRole(k, b.org_id, 'admin');
-          const pass = issuePassport(b);
+          const pass = await issuePassport(b);
           audit.append({ org_id: pass.org_id, actor: k.id, action: 'passport.issue', resource: pass.id, decision: 'allow', risk: 5, policy_id: null, reasons: [`kind:${pass.kind}`, `custody:${pass.custody}`], request_id: req._rid });
           return ok(201, pass);
         } catch (e) { return fail(e); }
@@ -511,7 +517,7 @@ async function main() {
           const cur = getStore().get('passports', b.passport_id);
           if (!cur || !cur.org_id) throw Object.assign(new Error('unknown passport'), { code: 'passport_unknown' });
           auth.requireRole(callerKey(req), cur.org_id, 'admin');
-          const pass = rotatePassport(b.passport_id, b.new_pubkey);
+          const pass = await rotatePassport(b.passport_id, b.new_pubkey);
           const rc = audit.append({ org_id: pass.org_id, actor: b.passport_id, action: 'passport.rotate', resource: pass.id, decision: 'allow', risk: 5, policy_id: null, reasons: [`kid:${pass.keys.current.kid}`], request_id: req._rid });
           return ok(200, { ...pass, receipt: rc });
         } catch (e) { return fail(e); }
@@ -524,7 +530,7 @@ async function main() {
           if (!cur) throw Object.assign(new Error('unknown passport'), { code: 'passport_unknown' });
           auth.requireRole(callerKey(req), cur.org_id, 'admin');
           if (!LIFECYCLE.includes(b.status)) throw Object.assign(new Error('invalid status'), { code: 'bad_request' });
-          const pass = setPassportStatus(id, b.status);
+          const pass = await setPassportStatus(id, b.status);
           audit.append({ org_id: pass.org_id, actor: callerKey(req)?.id || 'admin', action: `passport.${b.status}`, resource: id, decision: 'allow', risk: 5, policy_id: null, reasons: [b.reason || b.status], request_id: req._rid });
           return ok(200, pass);
         } catch (e) { return fail(e); }
@@ -685,10 +691,10 @@ async function main() {
           getStore().put('approvals', ap);
           let credential = null;
           if (ap.status === 'approved') {
-            const att = buildActionToken({ orgSigner: getOrgSigner(ap.org_id), org_id: ap.org_id, sub: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, amount_cents: ap.amount_cents, requires_approval: true, token_jti: ap.token_jti, aud: ap.aud || 'authragen' });
+            const att = await buildActionToken({ orgSigner: getOrgSigner(ap.org_id), org_id: ap.org_id, sub: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, amount_cents: ap.amount_cents, requires_approval: true, token_jti: ap.token_jti, aud: ap.aud || 'authragen' });
             ap.action_jti = att.jti; getStore().put('approvals', ap);
             ap.action_token = att.envelope;
-            credential = buildApproval({ orgSigner: getOrgSigner(ap.org_id), approval_id: ap.id, org_id: ap.org_id, passport_id: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, by: ap.decided_by, by_role: who.role, by_key_id: who.id, action_jti: att.jti, aud: ap.aud || 'authragen' });
+            credential = await buildApproval({ orgSigner: getOrgSigner(ap.org_id), approval_id: ap.id, org_id: ap.org_id, passport_id: ap.passport_id, intent_hash: ap.intent_hash, action: ap.action, resource: ap.resource, by: ap.decided_by, by_role: who.role, by_key_id: who.id, action_jti: att.jti, aud: ap.aud || 'authragen' });
             ap.approval_jti = credential.payload.jti || ap.id; getStore().put('approvals', ap);
           }
           const rc = audit.append({ org_id: ap.org_id, actor: ap.passport_id, action: ap.action, resource: ap.resource, decision: ap.status, risk: ap.risk, policy_id: ap.policy_id, policy_hash: ap.policy_hash, reasons: [`approval:${id}:${ap.status}`, `by:${ap.decided_by}/${who.role}`, `quorum:${need}`], intent_hash: ap.intent_hash, request_id: req._rid });
@@ -818,7 +824,7 @@ async function main() {
         try {
           if (!b.org_id) throw Object.assign(new Error('org_id required'), { code: 'bad_request' });
           auth.requireRole(k, b.org_id, 'reporter');
-          return ok(201, audit.evidenceBundle({ org_id: b.org_id, intent_hash: b.intent_hash || null, passport_id: b.passport_id || null, signer: gatewaySigner() }));
+          return ok(201, await audit.evidenceBundle({ org_id: b.org_id, intent_hash: b.intent_hash || null, passport_id: b.passport_id || null, signer: gatewaySigner() }));
         } catch (e) { return fail(e); }
       }
       if (p === '/v1/audit/verify' && req.method === 'GET') {
@@ -835,7 +841,7 @@ async function main() {
         try {
           if (!k) throw Object.assign(new Error('auth required'), { code: 'unauthorized' });
           auth.requireRole(k, k.org_id, 'admin');
-          return ok(201, audit.checkpoint(gatewaySigner()));
+          return ok(201, await audit.checkpoint(gatewaySigner()));
         } catch (e) { return fail(e); }
       }
       if (p === '/v1/audit/checkpoints' && req.method === 'GET') {
@@ -877,6 +883,13 @@ async function main() {
     logger.info({ event: 'server_started', port: PORT, store: storeBackend(), kms: KMS_TYPE });
     console.log(`AuthraGen gateway v2 on http://localhost:${PORT}`);
   });
+  const shutdown = async (signal) => {
+    logger.info({ event: 'shutdown', signal });
+    await new Promise(resolve => server.close(resolve));
+    try { await getStore().close?.(); } catch {}
+  };
+  process.once('SIGTERM', () => shutdown('SIGTERM').finally(() => process.exit(0)));
+  process.once('SIGINT', () => shutdown('SIGINT').finally(() => process.exit(0)));
   return server;
 }
 
