@@ -86,27 +86,39 @@ async function waitHealth(base, tries = 60) {
     ok(/^org_[0-9a-f]+$/.test(org_id), 'org id collision-resistant format');
 
     // second org for cross-tenant tests
-    const org2 = await admin.createOrg('t2').catch(() => null);
-    let admin2 = null, org2id = null;
-    if (!org2 || org2.error) {
-      // bootstrap consumed; create second org via... need new bootstrap? Instead mint via same gateway is blocked (bootstrap single-use).
-      // Workaround: create org2 by direct admin? Not allowed. So test cross-tenant with a fake org id + second key scope.
-      // We simulate cross-tenant by minting a key and trying to use it against a different org id.
-      org2id = 'org_deadbeefcafe';
-    } else { org2id = org2.id; admin2 = new AuthraGen({ baseUrl: BASE, key: org2.admin_secret }); }
+    let org2id = 'org_deadbeefcafe';
+    let admin2 = null;
+    // Try to create second org via admin (requires separate bootstrap; will fail gracefully)
+    try {
+      const org2 = await admin.createOrg('t2');
+      if (org2 && !org2.error) {
+        org2id = org2.id;
+        admin2 = new AuthraGen({ baseUrl: BASE, key: org2.admin_secret });
+      }
+    } catch {}
     if (!admin2) {
       // create a reporter key and attempt cross-org use (forbidden without leaking)
-      const rk = (await admin.mintKey(org_id, 'reporter', 'x')).secret;
+      let rkRaw;
+      try {
+        console.log('Admin key:', admin.key ? 'set (len=' + admin.key.length + ')' : 'NOT SET');
+        rkRaw = await admin.mintKey(org_id, 'reporter', 'x');
+      } catch (e) {
+        console.log('mintKey error:', e.body || e.message);
+        throw e;
+      }
+      const rk = `${rkRaw.key_id}.${rkRaw.secret}`;
       const repX = new AuthraGen({ baseUrl: BASE, key: rk });
       await throwsAsync(() => repX._call('/v1/passports/' + 'agt_x', 'GET'), /forbidden|not_found|unauthorized/, 'unknown id does not leak tenant existence');
     }
 
     // --- RBAC: reporter cannot manage; privilege escalation blocked ---
-    const repKey = (await admin.mintKey(org_id, 'reporter', 'test-rep')).secret;
+    const repKeyRaw = await admin.mintKey(org_id, 'reporter', 'test-rep');
+    const repKey = `${repKeyRaw.key_id}.${repKeyRaw.secret}`;
     const rep = new AuthraGen({ baseUrl: BASE, key: repKey });
     await throwsAsync(() => rep._call('/v1/revoke', 'POST', { type: 'passport', id: 'agt_x' }), /forbidden|bad_request/, 'reporter cannot revoke');
     await throwsAsync(() => rep._call(`/v1/orgs/${org_id}/keys`, 'POST', { role: 'admin' }), /forbidden/, 'reporter cannot mint keys (priv-esc blocked)');
-    const execKey = (await admin.mintKey(org_id, 'executor', 'test-exec')).secret;
+    const execKeyRaw = await admin.mintKey(org_id, 'executor', 'test-exec');
+    const execKey = `${execKeyRaw.key_id}.${execKeyRaw.secret}`;
     const exec = new AuthraGen({ baseUrl: BASE, key: execKey });
     await throwsAsync(() => exec._call(`/v1/orgs/${org_id}/keys`, 'POST', { role: 'admin' }), /forbidden/, 'executor cannot mint admin keys');
 

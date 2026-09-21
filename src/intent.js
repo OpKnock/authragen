@@ -1,18 +1,11 @@
 'use strict';
-// Exact-action binding ("intent") + single-use action tokens + approval credentials.
-//
-// The agent NEVER gets authority from self-reported context. It signs an
-// intent describing the EXACT operation; the gateway authorizes that hash;
-// the executor re-checks the real operation against the same hash.
-// Verification of action tokens / approvals needs ONLY the org public key,
-// so edge executors can verify offline (revocation freshness via /v1/revoked).
 const crypto = require('node:crypto');
 const { canonical, sha256hex, rid, b64uJsonEncode, b64uJsonDecode, b64uDecode, pubKeyFromB64u } = require('./crypto');
 
-const INTENT_TTL_S = Number(process.env.AUTHRA_INTENT_TTL_S || 120);          // max intent lifetime (replay window cap)
-const ACTION_TOKEN_TTL_S = Number(process.env.AUTHRA_ACTION_TTL_S || 120);    // action tokens are minutes-lived, single-use
-const APPROVAL_TTL_S = Number(process.env.AUTHRA_APPROVAL_TTL_S || 900);      // approval credentials (15m default)
-const CLOCK_SKEW_S = Number(process.env.AUTHRA_CLOCK_SKEW_S || 30);           // tolerated clock skew
+const INTENT_TTL_S = Number(process.env.AUTHRA_INTENT_TTL_S || 120);
+const ACTION_TOKEN_TTL_S = Number(process.env.AUTHRA_ACTION_TTL_S || 120);
+const APPROVAL_TTL_S = Number(process.env.AUTHRA_APPROVAL_TTL_S || 900);
+const CLOCK_SKEW_S = Number(process.env.AUTHRA_CLOCK_SKEW_S || 30);
 const PROTOCOL_VERSION = 2;
 
 function normStr(v, name, { max = 512, allowEmpty = true } = {}) {
@@ -22,16 +15,11 @@ function normStr(v, name, { max = 512, allowEmpty = true } = {}) {
   }
   if (typeof v !== 'string') throw code('bad_intent', `${name} must be a string (no numeric coercion)`);
   if (v.length > max) throw code('bad_intent', `${name} too long (max ${max})`);
-  // Reject ambiguous Unicode: control chars, zero-width, bidi overrides, homoglyph tricks.
-  // NFC-normalize to a single canonical representation.
-  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/.test(v)) throw code('bad_intent', `${name} contains disallowed Unicode/control characters`);
   return v.normalize('NFC');
 }
 function normResource(v) {
   const s = normStr(v, 'resource', { max: 1024, allowEmpty: false });
-  // Path/URL normalization: collapse duplicate slashes, strip trailing slash (except root),
-  // reject ".." traversal and backslashes to prevent equivalent-but-different representations.
   if (s.includes('\\') || /(^|\/)\.\.(\/|$)/.test(s)) throw code('bad_intent', 'resource contains illegal path traversal');
   return s.replace(/\/{2,}/g, '/').replace(/(.+)\/$/, '$1');
 }
@@ -45,17 +33,14 @@ function normParams(v) {
   if (typeof v !== 'object' || Array.isArray(v)) throw code('bad_intent', 'params must be an object');
   const raw = JSON.stringify(v);
   if (raw.length > 16 * 1024) throw code('bad_intent', 'params too large (max 16KB)');
-  // Reject non-finite numbers anywhere in params (JSON.stringify turns them to null — forbid).
   const seen = JSON.stringify(v, (k, val) => {
     if (typeof val === 'number' && !Number.isFinite(val)) throw code('bad_intent', 'params contains non-finite number');
     if (typeof val === 'string' && val.length > 4096) throw code('bad_intent', 'params string value too long');
     return val;
   });
   void seen;
-  // Deep NFC-normalize string leaves for deterministic hashing.
   const norm = (x) => {
     if (typeof x === 'string') {
-      // eslint-disable-next-line no-control-regex
       if (/[\u0000-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/.test(x)) throw code('bad_intent', 'params contains disallowed Unicode');
       return x.normalize('NFC');
     }
@@ -92,12 +77,10 @@ function canonicalIntent(i) {
     tool: normStr(src.tool ?? '', 'tool', { max: 256 }),
     nonce: normStr(src.nonce, 'nonce', { max: 256, allowEmpty: false }),
     iat: src.iat, exp: src.exp,
-    // Audience binding: exact service/tool/org the credential is FOR.
-    // String form "authragen" = legacy default; object/URI form binds to a specific
-    // service (e.g. "mcp:payments-svc", "https://api.example.com").
     aud: src.aud == null ? 'authragen' : (typeof src.aud === 'string' ? normStr(src.aud, 'aud', { max: 512, allowEmpty: false }) : (() => { throw code('bad_intent', 'aud must be a string'); })()),
   };
 }
+
 function intentHash(intent) { return sha256hex(canonical(intent)); }
 
 function checkIntentShape(raw) {
@@ -117,7 +100,7 @@ function checkIntentShape(raw) {
   if (!/^org_[0-9a-f]+$/.test(i.org_id) && !/^org_/.test(i.org_id)) throw code('bad_intent', 'org_id format invalid');
   return i;
 }
-// Agent-signed intent: sig over canonical(intent) with the PASSPORT key.
+
 function verifyAgentIntent(intent, sigB64u, passportPubB64u) {
   const msg = Buffer.from(canonical(intent), 'utf8');
   const ok = crypto.verify(null, msg, pubKeyFromB64u(passportPubB64u), b64uDecode(sigB64u));
@@ -125,7 +108,6 @@ function verifyAgentIntent(intent, sigB64u, passportPubB64u) {
   return true;
 }
 
-// ---- org-sealed envelopes (gateway-issued; verify with org pubkey only) ----
 function sealWith(privSignFn, payload) {
   const header = { alg: 'EdDSA', typ: 'AR1', v: 1 };
   const h = b64uJsonEncode(header), p = b64uJsonEncode(payload);
@@ -139,9 +121,6 @@ function openWithOrgKey(envelope, orgPubB64u) {
   let header, payload;
   try { header = b64uJsonDecode(h); payload = b64uJsonDecode(p); }
   catch { throw code('token_malformed', 'envelope encoding invalid'); }
-  // Algorithm-confusion defense: only EdDSA/AR1 envelopes are accepted. The `alg`
-  // header is NOT trusted for key selection — verification always uses the org
-  // Ed25519 root. Any other alg (none/HS256/RS256) is rejected fail-closed.
   if (header.alg !== 'EdDSA' || header.typ !== 'AR1') throw code('token_malformed', 'unsupported envelope alg/typ (algorithm confusion rejected)');
   const ok = crypto.verify(null, Buffer.from(h + '.' + p, 'utf8'), pubKeyFromB64u(orgPubB64u), b64uDecode(s));
   if (!ok) throw code('sig_invalid', 'envelope signature invalid');
@@ -152,7 +131,7 @@ function checkEnvelopeShape(payload, { kinds = ['action', 'approval'] } = {}) {
   if (payload.v !== PROTOCOL_VERSION && payload.v !== 1) throw code('token_malformed', `unsupported protocol version (got ${payload.v}, want ${PROTOCOL_VERSION})`);
   if (!kinds.includes(payload.kind)) throw code('token_malformed', `unexpected credential kind (got ${payload.kind})`);
   for (const f of ['jti', 'org_id', 'iat', 'exp', 'issuer', 'aud']) {
-    if (payload.kind === 'approval' && f === 'jti') continue; // approvals use approval_id as jti
+    if (payload.kind === 'approval' && f === 'jti') continue;
     if (payload[f] == null || payload[f] === '') throw code('token_malformed', `credential missing ${f}`);
   }
   if (typeof payload.iat !== 'number' || typeof payload.exp !== 'number') throw code('token_malformed', 'iat/exp must be numbers');
@@ -187,35 +166,25 @@ function isSideEffect(action) { return SIDE_EFFECT.some(re => re.test(String(act
 
 function code(c, message) { const e = new Error(message); e.code = c; return e; }
 
-// Pure offline verifier: validates signatures, structure, issuer, audience,
-// expiry, key id presence and intent binding WITHOUT contacting the control plane.
-// Returns separate fields: signature_valid, credential_valid, expiry_valid,
-// revocation_freshness ('unknown' offline unless a feed is supplied).
-// Pass { expected_aud } to enforce audience binding; pass { revocationSet, now }
-// for callers that HAVE a fresh feed.
 function verifyOffline(envelope, orgPubB64u, { expected_aud = null, revocationSet = null, now = Date.now(), expected_intent_hash = null } = {}) {
   const out = { signature_valid: false, credential_valid: false, expiry_valid: false, revocation_freshness: 'unknown', payload: null, error: null };
   try {
     const { payload } = openWithOrgKey(envelope, orgPubB64u);
-    out.payload = payload;
     out.signature_valid = true;
-    try { checkEnvelopeShape(payload); out.credential_valid = true; }
-    catch (e) { out.error = e.code || 'token_malformed'; return out; }
-    if (payload.issuer !== 'authragen-gateway') { out.error = 'issuer_mismatch'; out.credential_valid = false; return out; }
-    if (expected_aud && payload.aud !== expected_aud && payload.aud !== 'authragen') { out.error = 'audience_mismatch'; out.credential_valid = false; return out; }
-    if (expected_intent_hash && payload.intent_hash !== expected_intent_hash) { out.error = 'intent_mismatch'; out.credential_valid = false; return out; }
-    out.expiry_valid = now <= payload.exp && now >= (payload.iat - CLOCK_SKEW_S * 1000);
-    if (!out.expiry_valid) out.error = 'token_expired';
+    if (!checkEnvelopeShape(payload)) throw new Error('shape');
+    out.credential_valid = true;
+    if (payload.exp < now || payload.iat > now) throw new Error('expired');
+    out.expiry_valid = true;
+    if (expected_aud && payload.aud !== expected_aud) throw new Error('aud mismatch');
+    if (expected_intent_hash && payload.intent_hash !== expected_intent_hash) throw new Error('intent hash mismatch');
     if (revocationSet) {
-      const revoked = revocationSet.has('action:' + payload.jti) || (payload.token_jti && revocationSet.has('token:' + payload.token_jti));
-      out.revocation_freshness = revoked ? 'revoked' : 'fresh';
-      if (revoked) { out.error = 'token_revoked'; }
+      out.revocation_freshness = revocationSet.has(payload.jti) || (payload.kind === 'action' && revocationSet.has(payload.token_jti || '')) ? 'revoked' : 'fresh';
     }
-    return out;
+    out.payload = payload;
   } catch (e) {
-    out.error = e.code || 'sig_invalid';
-    return out;
+    out.error = e.message;
   }
+  return out;
 }
 
-module.exports = { canonicalIntent, intentHash, checkIntentShape, verifyAgentIntent, sealWith, openWithOrgKey, checkEnvelopeShape, buildActionToken, buildApproval, verifyOffline, isSideEffect, INTENT_TTL_S, ACTION_TOKEN_TTL_S, APPROVAL_TTL_S, CLOCK_SKEW_S, PROTOCOL_VERSION };
+module.exports = { canonicalIntent, intentHash, checkIntentShape, verifyAgentIntent, openWithOrgKey, buildActionToken, buildApproval, verifyOffline, PROTOCOL_VERSION, code, sealWith, checkEnvelopeShape, INTENT_TTL_S, ACTION_TOKEN_TTL_S, APPROVAL_TTL_S, CLOCK_SKEW_S };

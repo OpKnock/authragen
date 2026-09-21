@@ -32,6 +32,15 @@
     "prepare": "husky install"
   },
   "engines": { "node": ">=18" },
+  "dependencies": {
+    "@aws-sdk/client-kms": "^3.400.0",
+    "@azure/identity": "^4.0.0",
+    "@azure/keyvault-keys": "^4.8.0",
+    "@google-cloud/kms": "^3.5.0",
+    "ioredis": "^5.3.0",
+    "pg": "^8.11.0",
+    "prom-client": "^15.1.0"
+  },
   "devDependencies": {
     "eslint": "^9.0.0",
     "husky": "^9.0.0",
@@ -43,10 +52,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/authragen/authragen.git"
+    "url": "https://github.com/OpKnock/authragen.git"
   },
   "bugs": {
-    "url": "https://github.com/authragen/authragen/issues"
+    "url": "https://github.com/OpKnock/authragen/issues"
   },
   "homepage": "https://authragen.dev"
 }

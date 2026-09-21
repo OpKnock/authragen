@@ -14,9 +14,10 @@ class AuthraGen {
     this.key = key; this.bootstrap = bootstrap;
   }
   get headers() {
-    const h = { 'content-type': 'application/json' };
-    if (this.key) h.authorization = 'Bearer ' + this.key;
-    if (this.bootstrap) h['x-bootstrap-token'] = this.bootstrap;
+    const h = new Headers();
+    h.set('Content-Type', 'application/json');
+    if (this.key) h.set('Authorization', 'Bearer ' + this.key);
+    if (this.bootstrap) h.set('X-Bootstrap-Token', this.bootstrap);
     return h;
   }
   async _call(path, method = 'GET', body) {

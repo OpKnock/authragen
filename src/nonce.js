@@ -1,25 +1,14 @@
 'use strict';
-// Single-use nonce + consumed-token registry (replay protection).
-//
-// Production rule: in-memory state is NOT sufficient for distributed gateways.
-// This module is file-backed by default (durable across restarts, safe for a
-// single gateway) and supports Redis (SET NX EX) when AUTHRA_REDIS_URL is set,
-// so horizontally-scaled gateways share atomic consumption.
-//
-// Atomicity contract: consumeOnce() must be atomic. File backend uses an
-// exclusive lock file + read-modify-write under the server mutex for the
-// single-process case; Redis backend uses SET NX PX (atomic) for multi-process.
-// For Postgres deployments, replace this module with a table with a UNIQUE
-// constraint on `key` (INSERT ... ON CONFLICT DO NOTHING).
 const fs = require('node:fs');
 const path = require('node:path');
+const { getStore } = require('./store');
 
 function dataDir() {
   return process.env.AUTHRA_DATA || path.join(__dirname, '..', 'data');
 }
 function filePath() { return path.join(dataDir(), 'nonces.json'); }
 
-const used = new Map(); // value -> expires_at (hot cache)
+const used = new Map();
 let loaded = false;
 function loadFile() {
   if (loaded) return;
@@ -50,34 +39,37 @@ try { loadFile(); } catch {}
 const pruneTimer = setInterval(prune, 60 * 1000);
 if (pruneTimer.unref) pruneTimer.unref();
 
-// Redis backend (optional): atomic SET NX PX. Lazy-required so zero-dep default holds.
-let redis = null;
-function getRedis() {
-  if (redis !== undefined && redis !== null) return redis;
-  const url = process.env.AUTHRA_REDIS_URL;
-  if (!url) { redis = null; return null; }
-  try {
-    // Minimal RESP client over net — no dependency. Supports AUTH + SET NX PX + GET + DEL.
-    // If anything fails we fall back to file backend and warn (fail-closed per call).
-    redis = { url, available: true };
-    return redis;
-  } catch { redis = null; return null; }
+function getBackend() {
+  const store = getStore();
+  if (store && store.consumeNonce && store.consumeActionJTI) {
+    return 'distributed';
+  }
+  return 'file';
 }
 
-// Returns true if fresh (and consumes it), false if already seen.
-// NOTE: file backend is atomic only within this process (server mutex serializes
-// execute()). Set AUTHRA_REDIS_URL (or Postgres UNIQUE table) for distributed atomicity.
-function consumeOnce(value, ttlMs) {
+async function consumeOnce(value, ttlMs) {
+  const backend = getBackend();
+  if (backend === 'distributed') {
+    const store = getStore();
+    return await store.consumeNonce('global', value, Math.ceil(ttlMs / 1000));
+  }
   loadFile(); prune();
-  // Redis path would go here (SET key 1 NX PX ttlMs). Kept as documented hook:
-  // the server's withLock serializes this process; distributed deployments MUST
-  // configure Redis/Postgres — see PROTOCOL §7 and README production notes.
   if (used.has(value)) return false;
   used.set(value, Date.now() + ttlMs);
   saveFile();
   return true;
 }
+
+async function consumeActionJTI(jti, ttlMs) {
+  const backend = getBackend();
+  if (backend === 'distributed') {
+    const store = getStore();
+    return await store.consumeActionJTI(jti, Math.ceil(ttlMs / 1000));
+  }
+  return consumeOnce('att:' + jti, ttlMs);
+}
+
 function seen(value) { loadFile(); prune(); return used.has(value); }
 function clearAll() { used.clear(); loaded = true; saveFile(); }
 
-module.exports = { consumeOnce, seen, clearAll };
+module.exports = { consumeOnce, consumeActionJTI, seen, clearAll };
