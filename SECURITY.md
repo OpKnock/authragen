@@ -4,9 +4,10 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 2.1.x   | :white_check_mark: |
-| 2.0.x   | :x:                |
-| < 2.0   | :x:                |
+| 2.3.x   | :white_check_mark: |
+| 2.2.x   | :white_check_mark: |
+| 2.1.x   | :x:                |
+| < 2.1   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -36,7 +37,9 @@ AuthraGen implements defense in depth:
 - Short TTLs (configurable, default 2min intent / 5min action / 1hr approval)
 
 ### Cryptography
-- Ed25519 for all signatures (noble-ed25519)
+- Ed25519 for agent/passport signatures
+- EdDSA/ES256 gateway envelopes
+- ML-DSA-44/65/87 post-quantum credential profile (Node 24.7+)
 - SHA-256 for hashing
 - scrypt for API key hashing (N=16384, r=8, p=1)
 - HKDF for key derivation
@@ -62,13 +65,13 @@ AuthraGen implements defense in depth:
 - Versioned revocation feed with sequence numbers
 - Per-org audit streams with export/evidence bundles
 
-## Known Limitations (v2.1)
+## Known Limitations
 
-- File storage = single-instance only (use Postgres/Redis for production)
-- Process-local mutex for execute (distributed needs DB transactions)
-- No built-in KMS (interface exists, bring your own)
-- No built-in transparency log (anchor hook provided)
-- Offline revocation freshness requires polling
+- File storage is single-instance; production uses Postgres/Redis.
+- Dashboard interactive OIDC SSO is still proxy-based; OIDC bearer federation is supported.
+- ML-DSA credential support is native when running Node 24.7+; hybrid migration of the core Ed25519 passport format remains a separate profile.
+- External transparency anchoring remains operator-configured; tamper-evident logs are not magically immutable.
+- Offline revocation freshness requires polling or another trusted distribution mechanism.
 
 ## Disclosure Timeline
 
