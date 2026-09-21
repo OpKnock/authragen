@@ -35,14 +35,20 @@ class VaultSigner extends Signer {
     const orgResp = await this._request('GET', `${this.orgKeyPath}`);
     const cpResp = await this._request('GET', `${this.checkpointKeyPath}`);
     
+    const latestKey = (resp) => {
+      const keys = resp?.data?.keys || {};
+      const versions = Object.keys(keys).filter(v => /^\d+$/.test(v)).sort((a, b) => Number(b) - Number(a));
+      if (!versions.length || !keys[versions[0]]?.public_key) throw new Error('Vault transit key has no public key versions');
+      return keys[versions[0]].public_key;
+    };
     this._orgPubKey = crypto.createPublicKey({
-      key: Buffer.from(orgResp.data.keys['1'].public_key, 'utf8'),
+      key: Buffer.from(latestKey(orgResp), 'utf8'),
       format: 'pem',
       type: 'spki'
     });
     
     this._checkpointPubKey = crypto.createPublicKey({
-      key: Buffer.from(cpResp.data.keys['1'].public_key, 'utf8'),
+      key: Buffer.from(latestKey(cpResp), 'utf8'),
       format: 'pem',
       type: 'spki'
     });
