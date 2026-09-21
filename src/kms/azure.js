@@ -5,6 +5,21 @@ const { KeyClient, CryptographyClient } = require('@azure/keyvault-keys');
 const { DefaultAzureCredential } = require('@azure/identity');
 const crypto = require('node:crypto');
 
+function p1363ToDer(signature) {
+  const raw = Buffer.from(signature);
+  if (raw.length !== 64) return raw;
+  const normalize = (part) => {
+    let p = Buffer.from(part);
+    while (p.length > 1 && p[0] === 0) p = p.subarray(1);
+    if (p[0] & 0x80) p = Buffer.concat([Buffer.from([0]), p]);
+    return Buffer.concat([Buffer.from([0x02, p.length]), p]);
+  };
+  const r = normalize(raw.subarray(0, 32));
+  const s = normalize(raw.subarray(32, 64));
+  const body = Buffer.concat([r, s]);
+  return Buffer.concat([Buffer.from([0x30, body.length]), body]);
+}
+
 class AzureKmsSigner extends Signer {
   constructor(opts = {}) {
     super();
@@ -26,17 +41,14 @@ class AzureKmsSigner extends Signer {
     const orgKey = await this.keyClient.getKey(this.orgKeyName);
     const cpKey = await this.keyClient.getKey(this.checkpointKeyName);
     
-    this._orgPubKey = crypto.createPublicKey({
-      key: Buffer.from(orgKey.key.toString('utf8')),
-      format: 'pem',
-      type: 'spki'
-    });
-    
-    this._checkpointPubKey = crypto.createPublicKey({
-      key: Buffer.from(cpKey.key.toString('utf8')),
-      format: 'pem',
-      type: 'spki'
-    });
+    const ecJwk = (key) => {
+      if (!key?.key || key.key.kty !== 'EC' || key.key.crv !== 'P-256' || !key.key.x || !key.key.y) {
+        throw new Error('Azure KMS key must be an EC P-256 key');
+      }
+      return crypto.createPublicKey({ key: { kty: 'EC', crv: 'P-256', x: key.key.x, y: key.key.y }, format: 'jwk' });
+    };
+    this._orgPubKey = ecJwk(orgKey);
+    this._checkpointPubKey = ecJwk(cpKey);
     
     this._orgCrypto = new CryptographyClient(orgKey.id, this.credential);
     this._checkpointCrypto = new CryptographyClient(cpKey.id, this.credential);
@@ -55,7 +67,7 @@ class AzureKmsSigner extends Signer {
   async signOrgRoot(data) {
     const digest = crypto.createHash('sha256').update(data).digest();
     const result = await this._orgCrypto.sign('ES256', digest);
-    return Buffer.from(result.result).toString('base64url');
+    return p1363ToDer(result.result).toString('base64url');
   }
 
   async signCheckpoint(data) {
