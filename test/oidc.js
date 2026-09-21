@@ -49,6 +49,15 @@ function jwt(header, claims, privateKey) {
   assert.equal(principal.org_id, 'org_test');
   assert.equal(principal.role, 'executor');
   assert.equal(principal.source, 'oidc');
+  const nonceToken = jwt(
+    { typ: 'JWT', alg: 'RS256', kid: 'oidc-test-1' },
+    { iss: actualIssuer, sub: 'user-123', aud: 'authragen-client', iat: now, exp: now + 300, nonce: 'n-123', org_id: 'org_test', roles: ['ops-executor'] },
+    privateKey
+  );
+  assert.equal(verifier.verify(nonceToken, { nonce: 'n-123' }).claims.nonce, 'n-123');
+  assert.throws(() => verifier.verify(nonceToken, { nonce: 'wrong' }), /nonce mismatch/);
+  assert.equal(principal.role, 'executor');
+  assert.equal(principal.source, 'oidc');
 
   const bad = token.slice(0, -1) + (token.endsWith('A') ? 'B' : 'A');
   assert.throws(() => verifier.verify(bad), /signature invalid/);
