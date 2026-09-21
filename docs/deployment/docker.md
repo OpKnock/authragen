@@ -22,7 +22,10 @@ docker run -d \
   -e AUTHRA_ANCHOR_URL=https://rekor.example.com/api/v1/log/entries \
   authragen:latest
 
-# Or with docker-compose
+# Production compose requires real KMS + durable store settings:
+export AUTHRA_KMS=aws
+export AUTHRA_STORE=postgres
+export DATABASE_URL='postgres://user:password@db.example/authragen'
 docker-compose up -d
 ```
 
@@ -46,7 +49,7 @@ metadata:
   labels:
     app: authragen
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: authragen
@@ -216,21 +219,19 @@ spec:
 | `PORT` | No | 8787 | 8787 |
 | `NODE_ENV` | No | development | production |
 | `AUTHRA_DATA` | No | ./data | /app/data |
-| `AUTHRA_CORS` | No | * | Exact origins |
+| `AUTHRA_CORS` | No | disabled | Exact origins |
 | `AUTHRA_TRUST_PROXY` | No | 0 | 1 |
 | `AUTHRA_BODY_LIMIT` | No | 256kb | 256kb |
 | `AUTHRA_SESSION_TTL_MS` | No | 43200000 | 43200000 |
 | `AUTHRA_INTENT_TTL_S` | No | 120 | 120 |
-| `AUTHRA_ACTION_TTL_S` | No | 300 | 300 |
-| `AUTHRA_APPROVAL_TTL_S` | No | 3600 | 3600 |
+| `AUTHRA_ACTION_TTL_S` | No | 120 | 120 |
+| `AUTHRA_APPROVAL_TTL_S` | No | 900 | 900 |
 | `AUTHRA_CLOCK_SKEW_S` | No | 30 | 30 |
-| `AUTHRA_RATE_LIMIT_WINDOW_MS` | No | 60000 | 60000 |
-| `AUTHRA_RATE_LIMIT_MAX` | No | 100 | 1000+ |
 | `AUTHRA_RISK_CEILING` | No | 80 | 80 |
 | `AUTHRA_ALLOW_CUSTODY` | No | 0 | 0 |
 | `AUTHRA_KMS` | **Yes** | file | aws/gcp/vault/azure |
 | `AUTHRA_ANCHOR_URL` | Recommended | - | Set |
-| `AUTHRA_AUDIT_RETENTION_DAYS` | No | 2555 | 2555 |
+| `AUTHRA_AUDIT_RETENTION_DAYS` | No | - | Not implemented; manage audit retention operationally |
 
 ## Postgres Adapter (Production)
 
@@ -262,7 +263,7 @@ const redis = new Redis(process.env.REDIS_URL);
 ```
 GET /health
 ```
-Response: `{ "status": "ok", "backend": "postgres", "timestamp": "..." }`
+Response includes `ok`, protocol/version, backend, persistence status, timestamp, custody policy, and the request ID.
 
 ### Metrics (Prometheus)
 
