@@ -56,27 +56,31 @@ class RedisStore {
         local amount = tonumber(ARGV[1])
         local limit = tonumber(ARGV[2])
         local ttl = tonumber(ARGV[3])
-        
+        local hasBudget = ARGV[4] == '1'
+        local current = 0
+
+        if hasBudget then
+          local raw = redis.call('GET', budgetKey)
+          current = raw and tonumber(raw) or 0
+          if current + amount > limit then
+            return {0, 'budget_exceeded', current}
+          end
+        end
+
         if redis.call('SET', nonceKey, '1', 'EX', ttl, 'NX') == false then
-          return {0, 'nonce_replay'}
+          return {0, 'nonce_replay', current}
         end
         if redis.call('SET', jtiKey, '1', 'EX', ttl, 'NX') == false then
-          return {0, 'jti_replay'}
+          return {0, 'jti_replay', current}
         end
-        
-        local current = redis.call('GET', budgetKey)
-        current = current and tonumber(current) or 0
-        if current + amount > limit then
-          return {0, 'budget_exceeded'}
-        end
-        
-        local newVal = redis.call('INCRBY', budgetKey, amount)
-        if newVal == amount then
+
+        if hasBudget then
+          current = redis.call('INCRBY', budgetKey, amount)
           redis.call('EXPIRE', budgetKey, ttl)
         end
-        
-        return {1, newVal}
-      `
+
+        return {1, 'ok', current}
+`
     };
   }
 
@@ -158,8 +162,17 @@ class RedisStore {
     const nonceKey = `nonce:${orgId}:${nonce}`;
     const jtiKey = `action:jti:${actionJti}`;
     const budgetKey = `budget:${orgId}:${passportId}:${period}`;
-    const result = await this.redis.evalsha(this.checkAndDebitSha, 3, nonceKey, jtiKey, budgetKey, amountCents, limitCents, ttl);
-    return { success: result[0] === 1, error: result[1], current: result[1] };
+    const result = await this.redis.evalsha(this.checkAndDebitSha, 3, nonceKey, jtiKey, budgetKey, amountCents, limitCents, ttl, '1');
+    return { success: result[0] === 1, error: result[1], current: Number(result[2] || 0) };
+  }
+
+  async checkAndDebitExecution(orgId, nonce, actionJti, tokenId, amountCents, limitCents, ttl = 86400) {
+    await this.connect();
+    const nonceKey = `nonce:${orgId}:${nonce}`;
+    const jtiKey = `action:jti:${actionJti}`;
+    const budgetKey = `token-spend:${tokenId || actionJti}`;
+    const result = await this.redis.evalsha(this.checkAndDebitSha, 3, nonceKey, jtiKey, budgetKey, Number(amountCents) || 0, Number(limitCents), ttl, tokenId ? '1' : '0');
+    return { success: result[0] === 1, error: result[1], current: Number(result[2] || 0) };
   }
 
   // ===== Rate Limiting =====
