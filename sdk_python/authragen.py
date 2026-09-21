@@ -183,6 +183,8 @@ class AuthraGen:
                 pub = serialization.load_der_public_key(raw_pub)
                 if not isinstance(pub, ec.EllipticCurvePublicKey):
                     raise ValueError("invalid ES256 public key")
+                if pub.curve.name != "secp256r1":
+                    raise ValueError("ES256 requires P-256")
                 pub.verify(signature, signed, ec.ECDSA(hashes.SHA256()))
             out["signature_valid"] = True
             payload = json.loads(_b64u_decode(p).decode())
