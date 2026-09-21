@@ -60,8 +60,11 @@ class AuthraGen:
 
     # ---- orgs / keys ----
     def create_org(self, name): return self._call("/v1/orgs", "POST", {"name": name})
-    def mint_key(self, org_id, role="executor", name=None):
-        return self._call(f"/v1/orgs/{org_id}/keys", "POST", {"role": role, "name": name})
+    def mint_key(self, org_id, role="executor", name=None, **opts):
+        out = self._call(f"/v1/orgs/{org_id}/keys", "POST", {"role": role, "name": name, **opts})
+        if out.get("key_id") and out.get("secret") and not out.get("credential"):
+            out["credential"] = f'{out["key_id"]}.{out["secret"]}'
+        return out
 
     # ---- passports (CSR: YOUR pubkey) ----
     def issue_passport(self, org_id, name, pubkey, **opts):
@@ -98,9 +101,9 @@ class AuthraGen:
         raise Blocked(d)
     def approve(self, approval_id, approve=True, by_="human"):
         return self._call(f"/v1/approvals/{approval_id}", "POST", {"approve": approve, "by": by_})
-    def delegate(self, org_id, delegator_id, delegator_keypair, scope, resources=None, constraints=None, parent_jti=None, kid="k1"):
+    def delegate(self, org_id, delegator_id, delegator_keypair, scope, resources=None, constraints=None, parent_jti=None, kid="k1", subject_id=None):
         if not _HAS_ED: raise RuntimeError("pip install cryptography to sign delegations")
-        payload = {"v": 2, "jti": "tkn_" + secrets.token_hex(6), "org_id": org_id, "sub": delegator_id,
+        payload = {"v": 2, "jti": "tkn_" + secrets.token_hex(6), "org_id": org_id, "sub": subject_id or delegator_id,
                    "parent_jti": parent_jti, "scope": scope, "resources": resources or ["*"],
                    "constraints": constraints or {}, "kid": kid, "iat": int(time.time() * 1000)}
         h = _b64u_encode(json.dumps({"alg": "EdDSA", "typ": "AR1", "v": 1}, separators=(",", ":")).encode())
