@@ -1,6 +1,6 @@
 'use strict';
 const crypto = require('node:crypto');
-const { canonical, sha256hex, rid, b64uJsonEncode, b64uJsonDecode, b64uDecode, pubKeyFromWire, verifyBytes } = require('./crypto');
+const { canonical, sha256hex, rid, b64uJsonEncode, b64uJsonDecode, b64uDecode, pubKeyFromB64u, pubKeyFromWire, verifyBytes } = require('./crypto');
 
 const INTENT_TTL_S = Number(process.env.AUTHRA_INTENT_TTL_S || 120);
 const ACTION_TOKEN_TTL_S = Number(process.env.AUTHRA_ACTION_TTL_S || 120);
