@@ -1,4 +1,4 @@
-# Known Limitations (v2.2)
+# Known Limitations (v2.2.1)
 
 ## Storage
 
@@ -15,7 +15,7 @@
 |------------|--------|------------|
 
 | No HSM integration | FIPS 140-2 not certified | KMS backend can use CloudHSM |
-| Ed25519 only | Not quantum-resistant | Algorithm agility via `v` + `alg` header |
+| Agent/passport keys are Ed25519 | Not quantum-resistant | Envelope signing already supports EdDSA and ES256 at the gateway/KMS layer; PQ profiles remain future work |
 | No key ceremony | Single admin can rotate root | Policy: require quorum for root rotation (future) |
 
 ## Revocation & Freshness
