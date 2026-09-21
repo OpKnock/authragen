@@ -1,6 +1,5 @@
 'use strict';
 const http = require('node:http');
-const url = require('node:url');
 const crypto = require('node:crypto');
 const { initStore, getStore, backend: storeBackend } = require('./store');
 const { createOrgRecord, publicOrg, orgPubkey, issuePassport, publicPassport, rotatePassport,
@@ -354,8 +353,9 @@ async function main() {
 
   const server = http.createServer(async (req, res) => {
     req._rid = req.headers['x-request-id'] || newRequestId();
-    const u = url.parse(req.url, true);
-    const p = u.pathname || '/';
+    const parsedUrl = new URL(req.url || '/', 'http://authragen.local');
+    const u = { pathname: parsedUrl.pathname || '/', query: Object.fromEntries(parsedUrl.searchParams.entries()) };
+    const p = u.pathname;
     const t0 = Date.now();
     const startMem = process.memoryUsage().heapUsed;
     
@@ -432,15 +432,17 @@ async function main() {
       if (p === '/v1/orgs' && req.method === 'POST') {
         rateLimit(req, 'bootstrap', 5);
         const b = await body(req);
-        if (!b.name) return fail(Object.assign(new Error('name required'), { code: 'bad_request' }));
-        if (!auth.checkBootstrap(req.headers['x-bootstrap-token'])) return fail(Object.assign(new Error('valid x-bootstrap-token required (printed at first boot)'), { code: 'unauthorized' }));
-        const org = createOrgRecord(b.name);
-        for (const pol of seedPolicies(org.id)) getStore().put('policies', pol);
-        const key = auth.mintKey(org.id, 'admin', 'initial-admin');
-        auth.consumeBootstrap();
-        audit.append({ org_id: org.id, actor: org.id, action: 'org.create', resource: org.id, decision: 'allow', risk: 0, policy_id: null, reasons: ['bootstrap'], request_id: req._rid });
-        const fullSecret = `${key.key_id}.${key.secret}`;
-        return ok(201, { ...publicOrg(org), org_pubkey: orgPubkey(org.id), admin_key_id: key.key_id, admin_secret: fullSecret });
+        return withLock(async () => {
+          if (!b.name) return fail(Object.assign(new Error('name required'), { code: 'bad_request' }));
+          if (!auth.checkBootstrap(req.headers['x-bootstrap-token'])) return fail(Object.assign(new Error('valid x-bootstrap-token required (printed at first boot)'), { code: 'unauthorized' }));
+          const org = createOrgRecord(b.name);
+          for (const pol of seedPolicies(org.id)) getStore().put('policies', pol);
+          const key = auth.mintKey(org.id, 'admin', 'initial-admin');
+          auth.consumeBootstrap();
+          audit.append({ org_id: org.id, actor: org.id, action: 'org.create', resource: org.id, decision: 'allow', risk: 0, policy_id: null, reasons: ['bootstrap'], request_id: req._rid });
+          const fullSecret = `${key.key_id}.${key.secret}`;
+          return ok(201, { ...publicOrg(org), org_pubkey: orgPubkey(org.id), admin_key_id: key.key_id, admin_secret: fullSecret });
+        });
       }
       if (p === '/v1/orgs' && req.method === 'GET') {
         const k = callerKey(req);
@@ -771,6 +773,14 @@ async function main() {
           const rc = audit.append({ org_id: ap.org_id, actor: ap.passport_id, action: ap.action, resource: ap.resource, decision: ap.status, risk: ap.risk, policy_id: ap.policy_id, policy_hash: ap.policy_hash, reasons: [`approval:${id}:${ap.status}`, `by:${ap.decided_by}/${who.role}`, `quorum:${need}`], intent_hash: ap.intent_hash, request_id: req._rid });
           return ok(200, { ...publicApproval(ap), action_token: actionTokenEnvelope, approval_credential: credential?.envelope || null, receipt: rc, request_id: req._rid });
         } catch (e) { return fail(e); }
+      }
+      if (/^\/v1\/approvals\/[^/]+$/.test(p) && req.method === 'GET') {
+        const id = p.split('/')[3];
+        const ap = getStore().get('approvals', id);
+        if (!ap) return fail(Object.assign(new Error('unknown approval'), { code: 'not_found' }));
+        const k = callerKey(req);
+        try { auth.requireRole(k, ap.org_id, 'reporter'); } catch (e) { return fail(e); }
+        return ok(200, publicApproval(ap));
       }
       if (p === '/v1/approvals' && req.method === 'GET') {
         const k = callerKey(req);
