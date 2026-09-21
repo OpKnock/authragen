@@ -1,6 +1,6 @@
 {
   "name": "authragen",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "AuthraGen — vendor-neutral Agent Passport trust layer (exact-authority identity for agents)",
   "license": "Apache-2.0",
   "main": "sdk-js/authragen.js",
