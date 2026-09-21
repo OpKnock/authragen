@@ -73,7 +73,7 @@ class AzureKmsSigner extends Signer {
   async signCheckpoint(data) {
     const digest = crypto.createHash('sha256').update(data).digest();
     const result = await this._checkpointCrypto.sign('ES256', digest);
-    return Buffer.from(result.result).toString('base64url');
+    return p1363ToDer(result.result).toString('base64url');
   }
 
   async signBytes(data) { return this.signOrgRoot(Buffer.from(data)); }
