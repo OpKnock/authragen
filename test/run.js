@@ -54,6 +54,30 @@ async function waitHealth(base, tries = 60) {
     ok(h.ok && h.v === 2, 'gateway v2 healthy', JSON.stringify(h).slice(0, 120));
     ok(!!h.request_id, 'health carries request_id');
 
+    // Remote-backed mirrors refresh from the persistent source before serving API requests.
+    {
+      const { PersistentMirrorStore } = require('../src/store');
+      const remote = {
+        data: { orgs: [{ id: 'org_sync', name: 'before' }] },
+        async dumpCollection(col) { return (this.data[col] || []).map(x => ({ ...x })); },
+        async setRecord(col, obj) {
+          const rows = this.data[col] || [];
+          const i = rows.findIndex(x => x.id === obj.id);
+          if (i >= 0) rows[i] = { ...obj }; else rows.push({ ...obj });
+          this.data[col] = rows;
+        },
+        async deleteRecord(col, id) { this.data[col] = (this.data[col] || []).filter(x => x.id !== id); },
+      };
+      const mirror = await new PersistentMirrorStore(remote, 'postgres').init();
+      remote.data.orgs = [{ id: 'org_sync', name: 'after' }, { id: 'org_sync_2', name: 'new' }];
+      await mirror.refresh();
+      ok(mirror.get('orgs', 'org_sync')?.name === 'after' && mirror.has('orgs', 'org_sync_2'), 'remote mirror refresh imports cross-instance writes');
+      remote.data.orgs = [{ id: 'org_sync', name: 'after' }];
+      await mirror.refresh();
+      ok(!mirror.has('orgs', 'org_sync_2'), 'remote mirror refresh removes cross-instance deletes');
+      ok(mirror.consistencyMode() === 'remote-snapshot-per-request', 'remote-backed store advertises request-boundary consistency');
+    }
+
     // Production mode refuses unsafe file-backed defaults unless explicitly opted in.
     {
       const prod = cp.spawn(process.execPath, [path.join(__dirname, '..', 'src', 'server.js')], {
