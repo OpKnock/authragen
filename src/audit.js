@@ -78,13 +78,13 @@ function byOrg(org_id, limit = 100) {
 function exportJsonl(org_id) {
   return byOrg(org_id, Number.MAX_SAFE_INTEGER).map(r => JSON.stringify(r)).join('\n') + '\n';
 }
-function evidenceBundle({ org_id, intent_hash = null, passport_id = null, signer = null } = {}) {
+async function evidenceBundle({ org_id, intent_hash = null, passport_id = null, signer = null } = {}) {
   let receipts = byOrg(org_id, Number.MAX_SAFE_INTEGER);
   if (intent_hash) receipts = receipts.filter(r => r.intent_hash === intent_hash);
   if (passport_id) receipts = receipts.filter(r => r.actor === passport_id);
   const body = { v: 1, org_id, exported_at: Date.now(), intent_hash, passport_id, count: receipts.length, receipts };
   const bundle = { ...body, bundle_hash: sha256hex(canonical(body)) };
-  if (signer) bundle.signature = signer.signCanonical({ ...body, bundle_hash: bundle.bundle_hash });
+  if (signer) bundle.signature = await signer.signCanonical({ ...body, bundle_hash: bundle.bundle_hash });
   return bundle;
 }
 function readAll() {
@@ -106,15 +106,16 @@ function verify() {
   }
   return { ok: true, count: all.length, head: prev };
 }
-function checkpoint(signer) {
+async function checkpoint(signer) {
   const st = state();
   const prev = lastCheckpoint();
   const body = {
-    v: 1, ts: Date.now(), count: st.count, head: st.head,
+    v: 1, alg: signer.alg || 'EdDSA', ts: Date.now(), count: st.count, head: st.head,
     prev: prev ? prev.hash : 'GENESIS', gateway_pubkey: signer.pubkey,
   };
   const hash = sha256hex(canonical(body));
-  const rec = { ...body, hash, signature: signer.signCanonical({ ...body, hash }) };
+  const rec = { ...body, hash, signature: await signer.signCanonical({ ...body, hash }) };
+  fs.mkdirSync(path.dirname(CHECKPOINTS()), { recursive: true });
   fs.appendFileSync(CHECKPOINTS(), JSON.stringify(rec) + '\n');
   const anchorUrl = process.env.AUTHRA_ANCHOR_URL;
   if (anchorUrl) anchor(rec, anchorUrl);
