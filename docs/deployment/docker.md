@@ -152,7 +152,6 @@ metadata:
 data:
   AUTHRA_CORS: "https://api.yourdomain.com"
   AUTHRA_TRUST_PROXY: "1"
-  AUTHRA_RATE_LIMIT_MAX: "1000"
   AUTHRA_RISK_CEILING: "80"
 ---
 apiVersion: v1
