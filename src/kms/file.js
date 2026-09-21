@@ -9,6 +9,7 @@ const path = require('node:path');
 class FileSigner extends Signer {
   constructor(dataDir) {
     super();
+    this.algorithm = 'EdDSA';
     this.dataDir = dataDir;
     this.orgKeyPath = path.join(dataDir, 'org-root.key');
     this.checkpointKeyPath = path.join(dataDir, 'checkpoint.key');
@@ -32,13 +33,10 @@ class FileSigner extends Signer {
     this.checkpointPublicKey = crypto.createPublicKey(fs.readFileSync(this.checkpointKeyPath + '.pub'));
   }
 
-  getOrgPublicKey() {
-    return this.orgPublicKey.export({ type: 'spki', format: 'der' }).toString('base64url');
-  }
+  getAlgorithm() { return this.algorithm; }
+  getOrgPublicKey() { return this.orgPublicKey.export({ format: 'jwk' }).x; }
 
-  getCheckpointPublicKey() {
-    return this.checkpointPublicKey.export({ type: 'spki', format: 'der' }).toString('base64url');
-  }
+  getCheckpointPublicKey() { return this.checkpointPublicKey.export({ format: 'jwk' }).x; }
 
   async signOrgRoot(data) {
     const sig = crypto.sign(null, Buffer.from(data), this.orgPrivateKey);
