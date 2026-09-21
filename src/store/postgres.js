@@ -545,6 +545,7 @@ class PostgresStore {
     const id = r.id || (String(r.type) + ':' + String(r.target));
     try {
       await client.query('BEGIN');
+
       const existing = await client.query(
         'SELECT data FROM authragen_records WHERE collection = $1 AND id = $2 FOR UPDATE',
         ['revocations', id]
@@ -553,6 +554,37 @@ class PostgresStore {
         await client.query('COMMIT');
         return existing.rows[0].data;
       }
+
+      const legacy = await client.query(
+        `SELECT seq, org_id, type, id, kid, reason, timestamp
+           FROM revocations
+          WHERE org_id = $1 AND type = $2 AND id = $3
+            AND COALESCE(kid, '') = COALESCE($4, '')
+          ORDER BY seq DESC
+          LIMIT 1
+          FOR UPDATE`,
+        [r.org_id, r.type, r.target ?? r.id, r.kid || null]
+      );
+      if (legacy.rows[0]) {
+        const row = legacy.rows[0];
+        const rec = {
+          id,
+          seq: Number(row.seq),
+          type: row.type,
+          target: row.id,
+          kid: row.kid || null,
+          org_id: row.org_id,
+          reason: row.reason || 'manual',
+          at: new Date(row.timestamp || Date.now()).getTime()
+        };
+        await client.query(
+          'INSERT INTO authragen_records (collection,id,org_id,data,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (collection,id) DO NOTHING',
+          ['revocations', id, r.org_id, JSON.stringify(rec), new Date(rec.at), new Date(rec.at)]
+        );
+        await client.query('COMMIT');
+        return rec;
+      }
+
       const inserted = await client.query(`
         INSERT INTO revocations (org_id, type, id, kid, reason, cascade)
         VALUES ($1,$2,$3,$4,$5,$6)
