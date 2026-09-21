@@ -126,13 +126,19 @@ function lastCheckpoint() {
     if (!raw) return null;
     const lines = raw.split('\n');
     return JSON.parse(lines[lines.length - 1]);
-  } catch { return null; }
+  } catch (e) {
+    if (e?.code === 'ENOENT') return null;
+    throw Object.assign(new Error('checkpoint log unreadable or malformed'), { code: 'audit_corrupt', cause: e });
+  }
 }
 function listCheckpoints() {
   try {
     const raw = fs.readFileSync(CHECKPOINTS(), 'utf8').trim();
     return raw ? raw.split('\n').map(l => JSON.parse(l)) : [];
-  } catch { return []; }
+  } catch (e) {
+    if (e?.code === 'ENOENT') return [];
+    throw Object.assign(new Error('checkpoint log unreadable or malformed'), { code: 'audit_corrupt', cause: e });
+  }
 }
 function anchor(rec, target) {
   try {
