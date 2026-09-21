@@ -72,6 +72,14 @@ async function waitHealth(base, tries = 60) {
       ok(aws.region === 'eu-west-1' && aws.orgKeyId === 'org-key', 'KMS factory passes external backend options correctly');
     }
 
+    // --- cryptographic algorithm invariants ---
+    {
+      const { pubKeyFromWire } = require('../src/crypto');
+      const { publicKey: p384 } = require('node:crypto').generateKeyPairSync('ec', { namedCurve: 'secp384r1' });
+      const wire = p384.export({ type: 'spki', format: 'der' }).toString('base64url');
+      ok((() => { try { pubKeyFromWire(wire, 'ES256'); return false; } catch (e) { return /P-256|token_malformed/.test(String(e.message)); } })(), 'ES256 rejects non-P-256 public keys');
+    }
+
     // --- security headers + CORS + request IDs ---
     {
       const r = await fetch(BASE + '/v1/health');
@@ -404,6 +412,8 @@ async function waitHealth(base, tries = 60) {
       const approvalList = await admin._call(`/v1/approvals?org_id=${org_id}`);
       const approvalBlob = JSON.stringify(approvalList);
       ok(!/"action_token"\s*:/.test(approvalBlob) && !/AR1\./.test(approvalBlob), 'approval list never exposes bearer credentials');
+      const approvalDetail = await admin._call(`/v1/approvals/${qd.approval_id}`);
+      ok(approvalDetail.id === qd.approval_id && !approvalDetail.action_token && !approvalDetail.approval_credential, 'approval detail is readable without bearer credential leakage');
     }
 
     // --- lifecycle: suspend/quarantine reversible; revoke terminal + cascade ---
