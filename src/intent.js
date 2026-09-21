@@ -2,10 +2,14 @@
 const crypto = require('node:crypto');
 const { canonical, sha256hex, rid, b64uJsonEncode, b64uJsonDecode, b64uDecode, pubKeyFromB64u, pubKeyFromWire, verifyBytes } = require('./crypto');
 
-const INTENT_TTL_S = Number(process.env.AUTHRA_INTENT_TTL_S || 120);
-const ACTION_TOKEN_TTL_S = Number(process.env.AUTHRA_ACTION_TTL_S || 120);
-const APPROVAL_TTL_S = Number(process.env.AUTHRA_APPROVAL_TTL_S || 900);
-const CLOCK_SKEW_S = Number(process.env.AUTHRA_CLOCK_SKEW_S || 30);
+function envInt(name, fallback, min, max) {
+  const n = Number(process.env[name] ?? fallback);
+  return Number.isSafeInteger(n) && n >= min && n <= max ? n : fallback;
+}
+const INTENT_TTL_S = envInt('AUTHRA_INTENT_TTL_S', 120, 1, 86400);
+const ACTION_TOKEN_TTL_S = envInt('AUTHRA_ACTION_TTL_S', 120, 1, 86400);
+const APPROVAL_TTL_S = envInt('AUTHRA_APPROVAL_TTL_S', 900, 1, 7 * 86400);
+const CLOCK_SKEW_S = envInt('AUTHRA_CLOCK_SKEW_S', 30, 0, 300);
 const PROTOCOL_VERSION = 2;
 
 function normStr(v, name, { max = 512, allowEmpty = true } = {}) {
