@@ -7,7 +7,7 @@
 | File storage = single-instance | No horizontal scaling | Use Postgres adapter (documented) |
 
 
-| Authoritative mirror is instance-local | Multiple gateway instances can diverge in reads and token-budget state | Use one gateway instance per authoritative state store until cross-instance coordination is added |
+| Authoritative mirror is instance-local | Multiple gateway instances can diverge in ordinary control-plane reads | Use one gateway instance per authoritative state store until cross-instance coordination is added; replay and token-spend reservation are atomic on Postgres/Redis |
 
 ## KMS & Cryptography
 
