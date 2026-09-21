@@ -371,18 +371,25 @@ function ensureRevocationSeq() {
   }, 0);
   revSeqInitialized = true;
 }
-function revocationHead() {
+async function revocationHead() {
+  const store = _store();
+  const remote = typeof store.getRevocationHead === 'function' ? await store.getRevocationHead() : null;
+  if (remote != null) return remote;
   ensureRevocationSeq();
   return revSeq;
 }
-function addRevocation({ type, target, reason, org_id, kid = null }) {
-  ensureRevocationSeq();
+async function addRevocation({ type, target, reason, org_id, kid = null }) {
   const id = String(type) + ':' + String(target) + (kid ? ':' + kid : '');
-  const existing = _store().get('revocations', id);
+  const store = _store();
+  const existing = store.get('revocations', id);
   if (existing) return existing;
+  if (store.backend?.() !== 'file' && typeof store.addRevocation === 'function') {
+    return store.addRevocation({ id, type, target, kid: kid || null, org_id, reason: reason || 'manual', at: Date.now() });
+  }
+  ensureRevocationSeq();
   if (revSeq >= Number.MAX_SAFE_INTEGER) throw code('storage_error', 'revocation sequence exhausted');
   const rec = { id, seq: ++revSeq, type, target, kid: kid || null, org_id, reason: reason || 'manual', at: Date.now() };
-  _store().put('revocations', rec);
+  store.put('revocations', rec);
   return rec;
 }
 
