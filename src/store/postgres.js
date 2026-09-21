@@ -231,6 +231,8 @@ class PostgresStore {
         CREATE INDEX IF NOT EXISTS idx_apikeys_org ON api_keys(org_id);
       `);
 
+      await client.query('CREATE TABLE IF NOT EXISTS authragen_records (collection TEXT NOT NULL, id TEXT NOT NULL, org_id TEXT, data JSONB NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (collection, id)); CREATE INDEX IF NOT EXISTS idx_authragen_records_org ON authragen_records(collection, org_id);');
+
       await client.query('COMMIT');
       this.initialized = true;
     } catch (e) {
@@ -764,6 +766,14 @@ class PostgresStore {
     await this.pool.query(`DELETE FROM ${col} WHERE id = $1`, [id]);
   }
 
+  async dumpCollection(collection) {
+    const res = await this.pool.query('SELECT data FROM authragen_records WHERE collection = $1 ORDER BY created_at DESC', [collection]);
+    return res.rows.map(r => r.data);
+  }
+  async setRecord(collection, obj) {
+    await this.pool.query('INSERT INTO authragen_records (collection,id,org_id,data,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (collection,id) DO UPDATE SET org_id=EXCLUDED.org_id,data=EXCLUDED.data,updated_at=EXCLUDED.updated_at', [collection,obj.id,obj.org_id||null,JSON.stringify(obj),obj.created_at?new Date(obj.created_at):new Date(),new Date()]);
+  }
+  async deleteRecord(collection,id){ await this.pool.query('DELETE FROM authragen_records WHERE collection = $1 AND id = $2',[collection,id]); }
   backend() { return 'postgres'; }
 }
 
