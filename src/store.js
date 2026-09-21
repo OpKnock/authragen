@@ -20,7 +20,18 @@ const COLLECTIONS = ['orgs','passports','tokens','policies','revocations','appro
 class PersistentMirrorStore {
   constructor(remote, backendType){ this.remote=remote; this.backendType=backendType; this.mem=Object.fromEntries(COLLECTIONS.map(c=>[c,Object.create(null)])); this.writeChain=Promise.resolve(); this.lastWriteError=null; }
   async init(){ if(this.remote.init) await this.remote.init(); else if(this.remote.connect) await this.remote.connect(); for(const col of COLLECTIONS){ const rows=this.remote.dumpCollection?await this.remote.dumpCollection(col):[]; for(const row of rows) if(row&&row.id) this.mem[col][row.id]=row; } return this; }
-  _persist(task){ this.writeChain=this.writeChain.then(task).catch(err=>{ this.lastWriteError=err; console.error('[store] persistent write failed:',err.message); }); }
+  _persist(task){
+    this.writeChain=this.writeChain.then(task).catch(err=>{
+      this.lastWriteError=err;
+      console.error('[store] persistent write failed:',err.message);
+    });
+  }
+  async flush(){
+    await this.writeChain;
+    if(this.lastWriteError){
+      throw Object.assign(new Error('persistent store write failed: '+this.lastWriteError.message), { code:'storage_error' });
+    }
+  }
   get(col,id){ return this.mem[col]?.[id]||null; } all(col){ return this.mem[col]?Object.values(this.mem[col]):[]; } byOrg(col,org_id){ return this.all(col).filter(x=>x.org_id===org_id); }
   list(col,{org_id=null,status=null,limit=100,offset=0,q=null}={}){ let arr=this.all(col); if(org_id)arr=arr.filter(x=>x.org_id===org_id); if(status)arr=arr.filter(x=>(x.status||x.lifecycle||'')===status); if(q){const n=String(q).toLowerCase();arr=arr.filter(x=>JSON.stringify([x.name,x.id,x.owner,x.team,x.environment,x.model,x.framework,x.blueprint_id]).toLowerCase().includes(n));} arr=arr.slice().sort((a,b)=>(b.created_at||b.iat||0)-(a.created_at||a.iat||0)); return {items:arr.slice(offset,offset+limit),total:arr.length}; }
   put(col,obj){ if(!this.mem[col])this.mem[col]=Object.create(null); this.mem[col][obj.id]=obj; if(this.remote.setRecord)this._persist(()=>this.remote.setRecord(col,obj)); return obj; }
