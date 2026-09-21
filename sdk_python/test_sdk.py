@@ -8,6 +8,11 @@ def test_canonical_is_deterministic_and_sorted():
     assert _canonical({"signature": "drop", "a": 1}) == '{"a":1}'
 
 
+def test_canonical_matches_javascript_style_unicode_and_numbers():
+    assert _canonical({"x": "e\u0301"}) == '{"x":"é"}'
+    assert _canonical({"x": 1.0, "y": -0.0}) == '{"x":1,"y":0}'
+
+
 def test_intent_shape_and_hash():
     sdk = AuthraGen(base_url="http://example.invalid")
     intent = sdk.intent("agt_demo", "org_demo", "data.read", "catalog:item")
