@@ -26,7 +26,7 @@ Human / Organization
                  └─ Delegation (agent-signed, narrowing-only, registered)
                       └─ Signed Intent ──► Policy + Risk ──► allow / step-up / deny
                            └─ allow/step-up-approved ──► Action Credential (single-use, aud-bound)
-                                └─ /v1/execute: hash match + approval match + nonce consume + execute-time spend enforcement
+                                └─ /v1/execute: hash match + approval match + atomic replay/spend reservation + execute
                                      └─ Receipt (hash-chained, checkpointed, request-id + policy-hash bound)
 ```
 
@@ -112,8 +112,8 @@ oracle (risk is a triage heuristic).
   revocation and single-use state. Altered requests fail. Prepared (authorized) vs executed
   are distinct; receipts record both.
 - Replay: persistent nonce + action-jti store (file-backed single-instance; Redis/Postgres
-  for distributed atomicity). Token spend state is enforced at execute-time, but the current
-  mirror-backed token budget is not a cross-instance atomic counter.
+  for distributed atomicity). Postgres/Redis also atomically reserve token spend at execute-time;
+  the in-memory control-plane mirror remains instance-local for other state.
 - Credentials carry `jti, kid, issuer, subject, audience, iat, exp, intent_hash, version`.
   Algorithm confusion rejected (only `EdDSA/AR1` with the org Ed25519 root verifies).
 - Revocation cascades deterministically (org → blueprints → passports → sub-agents →
