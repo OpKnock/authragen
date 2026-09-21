@@ -18,26 +18,25 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Production stage
 FROM node:22-alpine AS production
 
-# Security: non-root user
-RUN addgroup -g 1000 -S authragen && \
-    adduser -u 1000 -S authragen -G authragen
-
+# Security: run as the image's built-in non-root `node` user (uid/gid 1000).
+# (Creating a fresh uid/gid 1000 fails: node:alpine already ships a `node`
+# user holding those IDs.)
 WORKDIR /app
 
 # Copy built artifacts
-COPY --from=builder --chown=authragen:authragen /app/node_modules ./node_modules
-COPY --chown=authragen:authragen package*.json ./
-COPY --chown=authragen:authragen src/ ./src/
-COPY --chown=authragen:authragen sdk-js/ ./sdk-js/
-COPY --chown=authragen:authragen sdk_python/ ./sdk_python/
-COPY --chown=authragen:authragen adapters/ ./adapters/
-COPY --chown=authragen:authragen README.md ./
-COPY --chown=authragen:authragen LICENSE* ./
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --chown=node:node package*.json ./
+COPY --chown=node:node src/ ./src/
+COPY --chown=node:node sdk-js/ ./sdk-js/
+COPY --chown=node:node sdk_python/ ./sdk_python/
+COPY --chown=node:node adapters/ ./adapters/
+COPY --chown=node:node README.md ./
+COPY --chown=node:node LICENSE* ./
 
 # Create data directory with correct permissions
-RUN mkdir -p /app/data && chown -R authragen:authragen /app/data
+RUN mkdir -p /app/data && chown -R node:node /app/data
 
-USER authragen
+USER node
 
 EXPOSE 8787
 
