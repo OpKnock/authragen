@@ -40,7 +40,8 @@ function consumeBootstrap() { try { fs.unlinkSync(BOOT_FILE()); } catch {} try {
 
 const ROLES = ['admin', 'approver', 'executor', 'reporter'];
 const RANK = { reporter: 1, executor: 2, approver: 3, admin: 4 };
-const SESSION_TTL_MS = Number(process.env.AUTHRA_SESSION_TTL_MS || 12 * 3600 * 1000);
+const configuredSessionTtl = Number(process.env.AUTHRA_SESSION_TTL_MS ?? 12 * 3600 * 1000);
+const SESSION_TTL_MS = Number.isSafeInteger(configuredSessionTtl) && configuredSessionTtl > 0 ? configuredSessionTtl : 12 * 3600 * 1000;
 
 function mintKey(org_id, role, name, { expires_in_ms = SESSION_TTL_MS } = {}) {
   if (!ROLES.includes(role)) throw Object.assign(new Error('invalid role'), { code: 'bad_request' });
