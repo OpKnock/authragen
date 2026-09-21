@@ -203,7 +203,7 @@ spec:
 - [ ] **CORS** - `AUTHRA_CORS` set to exact origins (not `*`)
 - [ ] **KMS** - `AUTHRA_KMS=aws|gcp|vault|azure` (not file-backed)
 - [ ] **Anchor** - `AUTHRA_ANCHOR_URL` configured for transparency log
-- [ ] **Storage** - Postgres/Redis for durable record and distributed replay primitives; keep one gateway instance until cross-instance budget coordination is added
+- [ ] **Storage** - Postgres/Redis for durable records, replay protection and atomic token-spend reservation; keep one gateway instance until cross-instance authoritative control-plane reads are coordinated
 - [ ] **Secrets** - No secrets in images/configmaps; use Vault/SealedSecrets
 - [ ] **Monitoring** - `/health` + `/metrics` (Prometheus) scraped
 - [ ] **Logging** - Structured JSON logs to centralized system
