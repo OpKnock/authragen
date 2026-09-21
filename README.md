@@ -78,9 +78,7 @@ adapters, JS + Python SDKs, control-plane dashboard.
 
 **Production deployment requirements:**
 Use a real KMS/HSM via `AUTHRA_KMS` and a durable Postgres/Redis backend. The gateway waits
-for persistent-store writes before returning successful responses. The current in-memory
-mirror keeps authoritative reads instance-local, so run one gateway instance per state store
-unless you add an external cross-instance coordination layer. Use HTTPS behind a trusted
+for persistent-store writes before returning successful responses. Postgres/Redis-backed gateways refresh the generic state mirror from the persistent source at each API request boundary, so ordinary control-plane reads do not remain permanently instance-local. Replay and token-spend reservations remain backend-atomic; the request sees a consistent remote snapshot for the duration of that request. Use HTTPS behind a trusted
 proxy (`AUTHRA_TRUST_PROXY=1`), exact `AUTHRA_CORS` origins, bounded request bodies, tuned
 rate limits and fresh revocation-feed polling for offline verifiers.
 
@@ -113,7 +111,8 @@ oracle (risk is a triage heuristic).
   are distinct; receipts record both.
 - Replay: persistent nonce + action-jti store (file-backed single-instance; Redis/Postgres
   for distributed atomicity). Postgres/Redis also atomically reserve token spend at execute-time;
-  the in-memory control-plane mirror remains instance-local for other state.
+  remote-backed gateways refresh their control-plane mirror from the persistent source at each
+  API request boundary, while file mode remains single-instance.
 - Credentials carry `jti, kid, issuer, subject, audience, iat, exp, intent_hash, version`.
   Algorithm confusion rejected (only `EdDSA/AR1` with the org Ed25519 root verifies).
 - Revocation cascades deterministically (org → blueprints → passports → sub-agents →
