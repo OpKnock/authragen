@@ -40,7 +40,7 @@ class PersistentMirrorStore {
   del(col,id){ if(this.mem[col])delete this.mem[col][id]; if(this.remote.deleteRecord)this._persist(()=>this.remote.deleteRecord(col,id)); }
   has(col,id){ return !!this.mem[col]?.[id]; }
   async consumeNonce(...args){ return this.remote.consumeNonce(...args); } async nonceExists(...args){ return this.remote.nonceExists?this.remote.nonceExists(...args):false; }
-  async consumeActionJTI(...args){ return this.remote.consumeActionJTI(...args); } async actionJTIExists(...args){ return this.remote.actionJTIExists?this.remote.actionJTIExists(...args):false; }
+  async consumeActionJTI(...args){ return this.remote.consumeActionJTI(...args); } async actionJTIExists(...args){ return this.remote.actionJTIExists?this.remote.actionJTIExists(...args):false; }  async checkAndDebitExecution(...args){ if(!this.remote.checkAndDebitExecution) return null; return this.remote.checkAndDebitExecution(...args); }
   async close(){ await this.writeChain; if(this.remote.close)await this.remote.close(); } backend(){ return this.backendType; }
 }
 
