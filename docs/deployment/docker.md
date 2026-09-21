@@ -168,7 +168,7 @@ metadata:
 type: Opaque
 stringData:
   kms-backend: "aws"
-  database-url: "postgres://user:password@postgres.example/authragen"
+  database-url: "REPLACE_WITH_DATABASE_URL"
   anchor-url: "https://rekor.example.com/api/v1/log/entries"
 ```
 
