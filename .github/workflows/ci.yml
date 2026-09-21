@@ -55,6 +55,30 @@ jobs:
           AUTHRA_DATA: ${{ runner.temp }}/authragen-test
       - run: npm run test:audit
 
+  federation:
+    name: OIDC + SPIFFE validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run test:federation
+
+  post-quantum:
+    name: ML-DSA (Node 24)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run test:pq
+
   test-python:
     name: Tests (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
