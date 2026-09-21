@@ -3,7 +3,7 @@
 // In-repo it reuses ../src/crypto + ../src/intent (pure modules); a published
 // package should bundle those two files alongside this one.
 const crypto = require('node:crypto');
-const { canonical, sha256hex, rid, b64uEncode, b64uDecode, pubKeyFromB64u, privKeyFromB64u } = require('../src/crypto');
+const { canonical, sha256hex, rid, b64uEncode, b64uDecode, pubKeyFromB64u, pubKeyFromWire, verifyBytes, privKeyFromB64u } = require('../src/crypto');
 
 function jwkPub(x) { return crypto.createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x }, format: 'jwk' }); }
 function jwkPriv(x, d) { return crypto.createPrivateKey({ key: { kty: 'OKP', crv: 'Ed25519', x, d }, format: 'jwk' }); }
@@ -34,7 +34,11 @@ class AuthraGen {
   }
   // ---- orgs & keys (admin) ----
   createOrg(name) { return this._call('/v1/orgs', 'POST', { name }); }
-  mintKey(org_id, role = 'executor', name) { return this._call(`/v1/orgs/${org_id}/keys`, 'POST', { role, name }); }
+  async mintKey(org_id, role = 'executor', name, opts = {}) {
+    const out = await this._call(`/v1/orgs/${org_id}/keys`, 'POST', { role, name, ...opts });
+    if (out.key_id && out.secret && !out.credential) out.credential = `${out.key_id}.${out.secret}`;
+    return out;
+  }
   // ---- passports: CSR flow (self-custody). pubkey = YOUR key. ----
   // Preferred mental flow: createAgent() → createIntent() → signIntent() → authorize() → execute().
   issuePassport(org_id, name, { pubkey, kind = 'agent', parent_id = null, parent_sig = null, exp_days, custodied = false, blueprint_id = null, owner = null, sponsor = null, team = null, environment = null, purpose = null, model = null, provider = null, runtime = null, framework = null } = {}) {
@@ -81,8 +85,8 @@ class AuthraGen {
   }
   approve(approval_id, approve = true, by = 'human') { return this._call(`/v1/approvals/${approval_id}`, 'POST', { approve, by }); }
   // ---- delegation: built + signed LOCALLY, registered server-side ----
-  async delegate({ org_id, delegator_id, delegatorPriv, scope, resources = ['*'], constraints = {}, parent_jti = null, kid = null }) {
-    const payload = { v: 2, jti: 'tkn_' + crypto.randomBytes(6).toString('hex'), org_id, sub: delegator_id, parent_jti, scope, resources, constraints, kid: kid || 'k1', iat: Date.now() };
+  async delegate({ org_id, delegator_id, delegatorPriv, scope, resources = ['*'], constraints = {}, parent_jti = null, kid = null, subject_id = null, sub = null }) {
+    const payload = { v: 2, jti: 'tkn_' + crypto.randomBytes(6).toString('hex'), org_id, sub: subject_id || sub || delegator_id, parent_jti, scope, resources, constraints, kid: kid || 'k1', iat: Date.now() };
     const key = jwkPriv(delegatorPriv.x, delegatorPriv.d);
     const h = b64uEncode(Buffer.from(JSON.stringify({ alg: 'EdDSA', typ: 'AR1', v: 1 }), 'utf8'));
     const p = b64uEncode(Buffer.from(JSON.stringify(payload), 'utf8'));
@@ -107,8 +111,10 @@ class AuthraGen {
       if (parts.length !== 4 || parts[0] !== 'AR1') throw new Error('not an AR1 envelope');
       const [, h, p, s] = parts;
       let header;
-      try { header = JSON.parse(Buffer.from(p.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')); } catch {}
-      const ok = crypto.verify(null, Buffer.from(h + '.' + p, 'utf8'), jwkPub(orgPubB64u), b64uDecode(s));
+      try { header = JSON.parse(Buffer.from(h.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')); } catch { throw new Error('token_malformed'); }
+      if (header.typ !== 'AR1' || header.v !== 1 || !['EdDSA','ES256'].includes(header.alg)) throw new Error('token_malformed');
+      const pub = pubKeyFromWire(orgPubB64u, header.alg);
+      const ok = verifyBytes(Buffer.from(h + '.' + p, 'utf8'), s, pub, header.alg);
       if (!ok) { out.error = 'sig_invalid'; return out; }
       out.signature_valid = true;
       const payload = JSON.parse(Buffer.from(p.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
