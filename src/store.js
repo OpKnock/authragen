@@ -23,7 +23,6 @@ class PersistentMirrorStore {
   _persist(task){
     this.writeChain=this.writeChain.then(async()=>{
       await task();
-      this.lastWriteError=null;
     }).catch(err=>{
       this.lastWriteError=err;
       console.error('[store] persistent write failed:',err.message);
