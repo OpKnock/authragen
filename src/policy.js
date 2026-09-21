@@ -112,6 +112,26 @@ function simulate(policies, req, now = new Date()) {
   return { ...ev, dry_run: true, would: ev.provisional === 'allow' ? 'ALLOW' : ev.provisional === 'require_approval' ? 'STEP-UP' : 'DENY' };
 }
 
+function validatePolicyBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw Object.assign(new Error('policy body must be an object'), { code: 'bad_request' });
+  if (!['allow', 'deny', 'require_approval'].includes(body.effect)) throw Object.assign(new Error('bad effect'), { code: 'bad_request' });
+  for (const field of ['actions', 'resources']) {
+    if (!Array.isArray(body[field]) || body[field].length > 256 || body[field].some(x => typeof x !== 'string' || !x.trim() || x.length > 512)) {
+      throw Object.assign(new Error(field + ' must contain only non-empty strings (max 512 chars each)'), { code: 'bad_request' });
+    }
+  }
+  if (body.priority != null && (!Number.isSafeInteger(Number(body.priority)) || Number(body.priority) < -1000000 || Number(body.priority) > 1000000)) {
+    throw Object.assign(new Error('priority must be a safe integer between -1000000 and 1000000'), { code: 'bad_request' });
+  }
+  if (body.condition != null && (typeof body.condition !== 'object' || Array.isArray(body.condition))) {
+    throw Object.assign(new Error('condition must be an object'), { code: 'bad_request' });
+  }
+  if (body.condition?.min_approvals != null && (!Number.isSafeInteger(Number(body.condition.min_approvals)) || Number(body.condition.min_approvals) < 1 || Number(body.condition.min_approvals) > 32)) {
+    throw Object.assign(new Error('condition.min_approvals must be an integer between 1 and 32'), { code: 'bad_request' });
+  }
+  return true;
+}
+
 function newPolicy(org_id, body) {
   const now = Date.now();
   const pol = {
@@ -121,8 +141,7 @@ function newPolicy(org_id, body) {
     description: body.description || '', version: 1,
     created_at: now, updated_at: now,
   };
-  if (!['allow', 'deny', 'require_approval'].includes(pol.effect)) throw Object.assign(new Error('bad effect'), { code: 'bad_request' });
-  if (!Array.isArray(pol.actions) || !Array.isArray(pol.resources)) throw Object.assign(new Error('actions/resources arrays required (empty means match-nothing)'), { code: 'bad_request' });
+  validatePolicyBody({ effect: pol.effect, actions: pol.actions, resources: pol.resources, priority: pol.priority, condition: pol.condition });
   pol.hash = policyHash(pol);
   return pol;
 }
@@ -140,4 +159,4 @@ function seedPolicies(org_id) {
   return seeds;
 }
 
-module.exports = { globMatch, anyMatch, policyHash, conditionMatches, evaluate, detectConflicts, simulate, newPolicy, seedPolicies };
+module.exports = { globMatch, anyMatch, policyHash, conditionMatches, evaluate, detectConflicts, simulate, validatePolicyBody, newPolicy, seedPolicies };
