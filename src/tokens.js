@@ -154,18 +154,31 @@ async function issuePassport({ org_id, name, kind = 'agent', pubkey, blueprint_i
 }
 function publicPassport(p) { const { ...pub } = upgradeLegacy({ ...p }); delete pub._privX; delete pub._privD; return pub; }
 async function rotatePassport(passport_id, new_pubkey) {
-  const pass = _store().get('passports', passport_id);
-  if (!pass) throw code('passport_unknown', 'Unknown passport');
-  const cur = pass.keys.current;
-  pass.keys.history = pass.keys.history || [];
-  pass.keys.history.push({ kid: cur.kid, pubkey: cur.pubkey, since: cur.since, until: Date.now() + pass.grace_period_s, revoked: false });
-  pass.keys.current = { kid: 'k' + (pass.keys.history.length + 1), pubkey: new_pubkey, since: Date.now() };
-  pass.updated_at = Date.now();
-  const signer = getOrgSigner(pass.org_id);
-  const doc = { ...pass, signature: undefined };
-  pass.signature = await signer.signCanonical(doc);
-  _store().put('passports', pass);
-  return pass;
+  const pass=_store().get('passports',passport_id);
+  if(!pass)throw code('passport_unknown','Unknown passport');
+  assertPassportUsable(pass);
+  let nextPub=new_pubkey, privOnce=null;
+  if(!nextPub){
+    if(pass.custody!=='server'||!allowCustody())throw code('bad_request','rotation requires new pubkey for self-custody');
+    const kp=generateEd25519();
+    nextPub=kp.pubB64u; privOnce={x:kp.pubB64u,d:kp.privB64u};
+    pass._privX=privOnce.x; pass._privD=privOnce.d;
+  }
+  try{pubKeyFromB64u(nextPub);}catch{throw code('bad_request','invalid Ed25519 pubkey');}
+  const now=Date.now();
+  pass.keys=pass.keys||{current:{kid:'k1',pubkey:nextPub,since:now},history:[]};
+  const cur=pass.keys.current;
+  pass.keys.history=pass.keys.history||[];
+  pass.keys.history.push({kid:cur.kid,pubkey:cur.pubkey,since:cur.since,until:now+(Number(pass.grace_period_s)||DEFAULT_GRACE_S)*1000,revoked:false});
+  const n=Number(String(cur.kid||'k0').replace(/^k/,''))||0;
+  pass.keys.current={kid:'k'+(n+1),pubkey:nextPub,since:now,revoked:false};
+  pass.updated_at=now;
+  const signer=getOrgSigner(pass.org_id);
+  pass.signature=await signer.signCanonical({...pass,signature:undefined});
+  _store().put('passports',pass);
+  const out=publicPassport(pass);
+  if(privOnce)out._privOnce=privOnce;
+  return out;
 }
 function revokeKey(passport_id, kid) {
   const pass = _store().get('passports', passport_id);
