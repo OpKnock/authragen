@@ -70,14 +70,20 @@ function hasDuplicateKeys(raw) {
       return 0;
     }
     function parseStr() {
-      // assumes s[pos]==='"'
-      pos++; let out = '';
+      const start = pos;
+      pos++;
+      let esc = false;
       while (pos < s.length) {
         const ch = s[pos];
-        if (esc) { out += ch; esc = false; pos++; continue; }
-        if (ch === '\\') { esc = true; out += ch; pos++; continue; }
-        if (ch === '"') { pos++; return out; }
-        out += ch; pos++;
+        if (esc) { esc = false; pos++; continue; }
+        if (ch === '\\') { esc = true; pos++; continue; }
+        if (ch === '"') {
+          pos++;
+          try { return JSON.parse(s.slice(start, pos)); }
+          catch { throw new Error('bad string'); }
+        }
+        if (ch.charCodeAt(0) < 0x20) throw new Error('bad string');
+        pos++;
       }
       throw new Error('bad string');
     }
