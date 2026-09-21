@@ -42,13 +42,13 @@ const ROLES = ['admin', 'approver', 'executor', 'reporter'];
 const RANK = { reporter: 1, executor: 2, approver: 3, admin: 4 };
 const SESSION_TTL_MS = Number(process.env.AUTHRA_SESSION_TTL_MS || 12 * 3600 * 1000);
 
-function mintKey(org_id, role, name, { expires_in_ms = null } = {}) {
+function mintKey(org_id, role, name, { expires_in_ms = SESSION_TTL_MS } = {}) {
   if (!ROLES.includes(role)) throw Object.assign(new Error('invalid role'), { code: 'bad_request' });
   const secret = newSecret('sk');
   const key_id = 'ak_' + crypto.randomBytes(8).toString('hex');
-  const key = { id: key_id, key_id, org_id, role, name, secret_hash: hashSecret(secret), expires_at: expires_in_ms ? Date.now() + expires_in_ms : null, last_used: null, revoked: false, created_at: Date.now() };
+  const key = { id: key_id, key_id, org_id, role, name, secret_hash: hashSecret(secret), expires_at: expires_in_ms === null ? null : Date.now() + Number(expires_in_ms), last_used: null, revoked: false, created_at: Date.now() };
   _store().put('apikeys', key);
-  return { key_id, secret, role, org_id, expires_at: key.expires_at };
+  return { key_id, secret, credential: `${key_id}.${secret}`, role, org_id, expires_at: key.expires_at };
 }
 function rotateKey(key_id) {
   const old = _store().get('apikeys', key_id);
@@ -58,7 +58,7 @@ function rotateKey(key_id) {
   const newKey = { ...old, id: newKeyId, key_id: newKeyId, secret_hash: hashSecret(secret), revoked: false, created_at: Date.now() };
   old.revoked = true; _store().put('apikeys', old);
   _store().put('apikeys', newKey);
-  return { key_id: newKey.key_id, secret, role: newKey.role, org_id: newKey.org_id };
+  return { key_id: newKey.key_id, secret, credential: `${newKey.key_id}.${secret}`, role: newKey.role, org_id: newKey.org_id, expires_at: newKey.expires_at };
 }
 function lookupKey(token) {
   if (!token) return null;
