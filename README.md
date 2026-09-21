@@ -78,7 +78,7 @@ adapters, JS + Python SDKs, control-plane dashboard.
 
 **Production deployment requirements:**
 Use a real KMS/HSM via `AUTHRA_KMS` and a durable Postgres/Redis backend. The gateway waits
-for persistent-store writes before returning successful responses. Postgres/Redis-backed gateways refresh the generic state mirror from the persistent source at each API request boundary, so ordinary control-plane reads do not remain permanently instance-local. Replay and token-spend reservations remain backend-atomic; the request sees a consistent remote snapshot for the duration of that request. Use HTTPS behind a trusted
+for persistent-store writes before returning successful responses. Postgres/Redis-backed gateways refresh the generic state mirror from the persistent source at each API request boundary, so ordinary control-plane reads do not remain permanently instance-local. Replay and token-spend reservations remain backend-atomic; the request sees a remote-refreshed control-plane state for the duration of that request. Use HTTPS behind a trusted
 proxy (`AUTHRA_TRUST_PROXY=1`), exact `AUTHRA_CORS` origins, bounded request bodies, tuned
 rate limits and fresh revocation-feed polling for offline verifiers.
 
