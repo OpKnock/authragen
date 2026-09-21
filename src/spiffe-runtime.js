@@ -10,10 +10,12 @@ let refreshTimer = null;
 function loadConfig() {
   if (!process.env.AUTHRA_SPIFFE_AUDIENCE) return null;
   const jwksFile = process.env.AUTHRA_SPIFFE_JWKS_FILE;
+  const orgId = process.env.AUTHRA_SPIFFE_ORG_ID;
   if (!jwksFile) throw new Error('AUTHRA_SPIFFE_JWKS_FILE required when SPIFFE bearer authentication is enabled');
+  if (!orgId) throw new Error('AUTHRA_SPIFFE_ORG_ID required when SPIFFE bearer authentication is enabled');
   return {
     audience: process.env.AUTHRA_SPIFFE_AUDIENCE,
-    orgId: process.env.AUTHRA_SPIFFE_ORG_ID || null,
+    orgId,
     role: process.env.AUTHRA_SPIFFE_ROLE || 'executor',
     allowedIds: process.env.AUTHRA_SPIFFE_ALLOWED_IDS ? JSON.parse(process.env.AUTHRA_SPIFFE_ALLOWED_IDS) : null,
     jwksFile
