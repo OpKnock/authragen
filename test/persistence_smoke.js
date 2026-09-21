@@ -22,8 +22,9 @@ async function testPostgres() {
   ));
   assert.equal(attempts.filter(x => x.success).length, 10, 'Postgres token spend must enforce cap atomically');
 
-  const replay = await b.checkAndDebitExecution('org_smoke', 'same_nonce', 'same_jti', token, 1, 100);
-  const replay2 = await a.checkAndDebitExecution('org_smoke', 'same_nonce', 'same_jti', token, 1, 100);
+  const replayToken = 'replay_' + Date.now();
+  const replay = await b.checkAndDebitExecution('org_smoke', 'same_nonce', 'same_jti', replayToken, 1, 100);
+  const replay2 = await a.checkAndDebitExecution('org_smoke', 'same_nonce', 'same_jti', replayToken, 1, 100);
   assert.notEqual(replay.success, replay2.success, 'Postgres replay reservation must be single-winner');
 
   await a.deleteRecord('orgs', id);
@@ -50,8 +51,9 @@ async function testRedis() {
   ));
   assert.equal(attempts.filter(x => x.success).length, 10, 'Redis token spend must enforce cap atomically');
 
-  const replay = await b.checkAndDebitExecution('org_smoke', 'same_nonce', 'same_jti', token, 1, 100);
-  const replay2 = await a.checkAndDebitExecution('org_smoke', 'same_nonce', 'same_jti', token, 1, 100);
+  const replayToken = 'replay_' + Date.now();
+  const replay = await b.checkAndDebitExecution('org_smoke', 'same_nonce', 'same_jti', replayToken, 1, 100);
+  const replay2 = await a.checkAndDebitExecution('org_smoke', 'same_nonce', 'same_jti', replayToken, 1, 100);
   assert.notEqual(replay.success, replay2.success, 'Redis replay reservation must be single-winner');
 
   await a.deleteRecord('orgs', id);
