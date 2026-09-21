@@ -7,7 +7,7 @@
 | File storage = single-instance | No horizontal scaling | Use Postgres adapter (documented) |
 
 
-| Remote control-plane reads use request-boundary snapshots | Each API request refreshes the in-memory mirror from Postgres/Redis before evaluation; very large installations pay extra read cost | Use Postgres/Redis for multi-instance deployments; tune gateway capacity and database resources as fleet size grows |
+| Remote control-plane reads use request-boundary remote refreshes | Each API request refreshes the in-memory mirror from Postgres/Redis before evaluation; very large installations pay extra read cost | Use Postgres/Redis for multi-instance deployments; tune gateway capacity and database resources as fleet size grows |
 
 ## KMS & Cryptography
 
