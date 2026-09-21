@@ -76,7 +76,7 @@ class RedisStore {
 
         if hasBudget then
           current = redis.call('INCRBY', budgetKey, amount)
-          redis.call('EXPIRE', budgetKey, ttl)
+          if ttl > 0 then redis.call('EXPIRE', budgetKey, ttl) end
         end
 
         return {1, 'ok', current}
@@ -157,6 +157,11 @@ class RedisStore {
   }
 
   // ===== Atomic check-and-debit (nonce + jti + budget) =====
+  async getTokenSpend(tokenId) {
+    await this.connect();
+    return Number(await this.redis.get(`token-spend:${tokenId}`) || 0);
+  }
+
   async checkAndDebit(orgId, passportId, period, nonce, actionJti, amountCents, limitCents, ttl = 86400) {
     await this.connect();
     const nonceKey = `nonce:${orgId}:${nonce}`;
