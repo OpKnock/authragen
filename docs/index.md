@@ -29,6 +29,10 @@ features:
     details: Hash-chained receipts, signed checkpoints, versioned revocation feed, offline verifier with freshness flags.
   - title: Multi-Runtime Adapters
     details: OpenAI, Anthropic, Gemini, MCP, A2A, n8n — one exact-intent flow across all.
+  - title: Federated Identity
+    details: OIDC federation, SPIFFE/SPIRE SVID validation and Workload API client support.
+  - title: Post-Quantum Credentials
+    details: Native ML-DSA-44/65/87 credential profile on Node runtimes with WebCrypto PQ support.
   - title: Production Ready
-    details: Rate limiting, CSP, structured errors, request IDs, KMS interface, Postgres/Redis adapters documented.
+    details: Rate limiting, CSP, structured errors, request IDs, KMS interface, durable Postgres/Redis audit and control-plane storage.
 ---
