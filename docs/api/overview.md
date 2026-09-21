@@ -29,9 +29,9 @@ curl -H "Authorization: Bearer ${AUTHRA_API_KEY}" ...
 | Endpoint | Limit | Window |
 |----------|-------|--------|
 | `POST /v1/orgs` (bootstrap) | 5 | 1 min |
-| `POST /v1/authorize` | 100 | 1 min |
-| `POST /v1/execute` | 100 | 1 min |
-| `POST /v1/verify` | 60 | 1 min |
+| `POST /v1/authorize` | 180 | 1 min |
+| `POST /v1/execute` | 180 | 1 min |
+| `POST /v1/verify` | 120 | 1 min |
 | Other rate-limited routes | Route-specific | 1 min |
 
 ## Endpoints
