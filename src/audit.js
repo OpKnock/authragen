@@ -26,14 +26,10 @@ const LOG_PATH = LOG; const STATE_PATH = STATE; const CHECKPOINTS_PATH = CHECKPO
 function state() {
   try { return JSON.parse(fs.readFileSync(STATE(), 'utf8')); }
   catch {
-    // recover from log (one-time) or start fresh
-    try {
-      const raw = fs.readFileSync(LOG(), 'utf8').trim();
-      if (!raw) throw new Error('empty');
-      const lines = raw.split('\n');
-      const last = JSON.parse(lines[lines.length - 1]);
-      return { count: lines.length, head: last.hash };
-    } catch { return { count: 0, head: 'GENESIS' }; }
+    // Recover state from a valid log, but never treat a malformed log as a fresh log.
+    const all = readAll();
+    if (!all.length) return { count: 0, head: 'GENESIS' };
+    return { count: all.length, head: all[all.length - 1].hash };
   }
 }
 function redact(entry) {
@@ -92,7 +88,9 @@ function readAll() {
     const raw = fs.readFileSync(LOG(), 'utf8').trim();
     if (!raw) return [];
     return raw.split('\n').map(l => JSON.parse(l));
-  } catch { return []; }
+  } catch (e) {
+    throw Object.assign(new Error('audit log unreadable or malformed'), { code: 'audit_corrupt', cause: e });
+  }
 }
 function verify() {
   const all = readAll();
