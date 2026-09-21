@@ -375,6 +375,7 @@ async function main() {
       if (!['postgres', 'redis'].includes(STORE_TYPE)) throw new Error('production requires AUTHRA_STORE=postgres or redis (or explicitly set AUTHRA_ALLOW_INSECURE_PROD_DEFAULTS=1 for a non-production demo)');
     }
     await initStore();
+    audit.configureStore(getStore());
     await initSigners(KMS_TYPE);
     logger.info({ event: 'store_initialized', backend: storeBackend(), kms: KMS_TYPE });
   } catch (e) {
@@ -411,6 +412,7 @@ async function main() {
     const ok = async (code, obj) => {
       try {
         await getStore().flush?.();
+        await audit.flush?.();
       } catch (e) {
         const storageErr = Object.assign(new Error('persistent storage unavailable'), { code: 'storage_error', status: 500 });
         logLine(500);
