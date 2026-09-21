@@ -1,12 +1,18 @@
 """AuthraGen Python SDK v2 — self-custody by default (needs `cryptography` for key ops;
 service-key read/approve paths work without it). Stdlib + cryptography only."""
-import json, urllib.request, urllib.error, secrets, time, base64, hashlib
+import base64
+import hashlib
+import json
+import secrets
+import time
+import urllib.error
+import urllib.request
 
 try:
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
-    from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
     _HAS_ED = True
 except ImportError:
     _HAS_ED = False
@@ -43,8 +49,10 @@ class AuthraGen:
             with urllib.request.urlopen(req) as r:
                 return json.loads(r.read().decode() or "{}")
         except urllib.error.HTTPError as e:
-            try: j = json.loads(e.read().decode() or "{}")
-            except Exception: raise
+            try:
+                j = json.loads(e.read().decode() or "{}")
+            except ValueError:
+                raise RuntimeError(f"AuthraGen {method} {path}: {e.code} invalid JSON response") from e
             if "decision" in j: return j
             raise RuntimeError(f"AuthraGen {method} {path}: {e.code} {j}")
 
@@ -158,6 +166,6 @@ class AuthraGen:
             out["expiry_valid"] = int(time.time() * 1000) <= payload["exp"]
             if not out["expiry_valid"]: out["error"] = "token_expired"
             return out
-        except Exception as e:
+        except (ValueError, RuntimeError, TypeError) as e:
             out["error"] = str(e)[:120]; return out
     verify_offline_static = verify_envelope_offline
