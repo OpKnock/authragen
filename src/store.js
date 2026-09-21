@@ -15,7 +15,7 @@ const DATA_DIR = resolveDataDir();
 let activeStore = null;
 let activeBackend = null;
 
-const COLLECTIONS = ['orgs','passports','tokens','policies','revocations','approvals','apikeys','blueprints'];
+const COLLECTIONS = ['orgs','passports','tokens','policies','revocations','approvals','apikeys','blueprints','audit_receipts','audit_checkpoints'];
 
 class PersistentMirrorStore {
   constructor(remote, backendType){ this.remote=remote; this.backendType=backendType; this.mem=Object.fromEntries(COLLECTIONS.map(c=>[c,Object.create(null)])); this.writeChain=Promise.resolve(); this.refreshing=null; this.lastWriteError=null; this.lastSyncAt=0; }
