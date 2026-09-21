@@ -1,4 +1,14 @@
-# CHANGELOG — AuthraGen v2/vNext security hardening
+# CHANGELOG — AuthraGen
+
+## v2.3.0 (2026-09-22) — federation, durable audit, distributed validation, and post-quantum credentials
+
+- Added OIDC federation with issuer discovery, JWKS validation, audience/azp checks, claim-to-RBAC mapping, and organization mapping.
+- Added SPIFFE/SPIRE interoperability: X.509-SVID and JWT-SVID validation plus a standards-aligned Workload API client over local Unix sockets.
+- Added native ML-DSA-44/65/87 credentials through Node WebCrypto on supported Node releases.
+- Made Postgres/Redis authoritative for audit receipts and checkpoints in durable deployments.
+- Added distributed persistence, two-instance HTTP, concurrent load, soak, federation, PQ, and gated real-KMS CI workflows.
+
+
 
 ## v2.1.0 (2026-09-16) — production-oriented vNext
 
