@@ -4,6 +4,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { getStore } = require('./store');
 const { hashSecret, checkSecret, newSecret } = require('./signer');
+const oidc = require('./oidc');
+const spiffe = require('./spiffe-runtime');
 
 function dataDir() { return process.env.AUTHRA_DATA || path.join(__dirname, '..', 'data'); }
 function BOOT_FILE() { return path.join(dataDir(), 'bootstrap.json'); }
@@ -63,6 +65,16 @@ function rotateKey(key_id) {
 }
 function lookupKey(token) {
   if (!token) return null;
+  if (String(token).split('.').length === 3) {
+    try {
+      const principal = oidc.authenticate(token);
+      if (principal) return principal;
+    } catch {}
+    try {
+      const principal = spiffe.authenticate(token);
+      if (principal) return principal;
+    } catch {}
+  }
   const idx = token.indexOf('.');
   if (idx === -1) return null;
   const key_id = token.slice(0, idx);
