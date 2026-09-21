@@ -218,6 +218,14 @@ class PostgresStore {
       `);
 
       await client.query(`
+        CREATE TABLE IF NOT EXISTS token_spends (
+          token_id TEXT PRIMARY KEY,
+          spent_cents BIGINT NOT NULL DEFAULT 0,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+
+      await client.query(`
         CREATE TABLE IF NOT EXISTS api_keys (
           key_id TEXT PRIMARY KEY,
           org_id TEXT NOT NULL REFERENCES orgs(id),
@@ -685,6 +693,59 @@ class PostgresStore {
   async actionJTIExists(jti) {
     const res = await this.pool.query('SELECT 1 FROM action_jtis WHERE jti = $1', [jti]);
     return res.rows.length > 0;
+  }
+
+  // ===== Atomic execute reservation =====
+  async checkAndDebitExecution(orgId, nonce, actionJti, tokenId, amountCents, limitCents) {
+    const amount = Number(amountCents) || 0;
+    const limit = Number(limitCents);
+    if (!Number.isSafeInteger(amount) || amount < 0 || !Number.isSafeInteger(limit) || limit < 0) {
+      throw Object.assign(new Error('invalid execution budget'), { code: 'bad_request' });
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const nonceRes = await client.query(
+        'INSERT INTO nonces (org_id, nonce) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING 1',
+        [orgId, nonce]
+      );
+      if (nonceRes.rowCount !== 1) {
+        await client.query('ROLLBACK');
+        return { success: false, error: 'nonce_replay', current: 0 };
+      }
+      const jtiRes = await client.query(
+        'INSERT INTO action_jtis (jti) VALUES ($1) ON CONFLICT DO NOTHING RETURNING 1',
+        [actionJti]
+      );
+      if (jtiRes.rowCount !== 1) {
+        await client.query('ROLLBACK');
+        return { success: false, error: 'jti_replay', current: 0 };
+      }
+      let current = 0;
+      if (tokenId) {
+        const spendRes = await client.query(
+          'SELECT spent_cents FROM token_spends WHERE token_id = $1 FOR UPDATE',
+          [tokenId]
+        );
+        current = Number(spendRes.rows[0]?.spent_cents || 0);
+        if (!Number.isSafeInteger(current) || current + amount > limit) {
+          await client.query('ROLLBACK');
+          return { success: false, error: 'budget_exceeded', current };
+        }
+        await client.query(
+          'INSERT INTO token_spends (token_id, spent_cents, updated_at) VALUES ($1,$2,NOW()) ON CONFLICT (token_id) DO UPDATE SET spent_cents = EXCLUDED.spent_cents, updated_at = NOW()',
+          [tokenId, current + amount]
+        );
+        current += amount;
+      }
+      await client.query('COMMIT');
+      return { success: true, current };
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
   // ===== Budgets =====
