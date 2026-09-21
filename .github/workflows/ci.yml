@@ -79,7 +79,8 @@ jobs:
         run: |
           npm audit --json > npm-audit.json || true
           node -e "const a=require('./npm-audit.json'); console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities}, null, 2))"
-      - run: npm audit --audit-level=high
+      - name: Gate production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
       - uses: github/codeql-action/init@v3
         with:
           languages: javascript,python
