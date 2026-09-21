@@ -445,7 +445,7 @@ async function waitHealth(base, tries = 60) {
       await throwsAsync(() => me.execute(forged, good.ii), /malformed|sig_invalid|mismatch/, 'algorithm confusion (alg:none) rejected');
       await throwsAsync(() => me.execute('garbage', good.ii), /malformed/, 'malformed credential rejected');
       // issuer mismatch: token from another org root cannot verify here
-      await throwsAsync(() => admin._call('/v1/verify', 'POST', { envelope: good.dd.action_token, org_id: 'org_nonexistent' }), /org_unknown|sig_invalid|malformed/, 'issuer/org mismatch rejected');
+      await throwsAsync(() => admin._call('/v1/verify', 'POST', { envelope: good.dd.action_token, org_id: 'org_nonexistent' }), /token_mismatch|org_unknown|sig_invalid|malformed/, 'issuer/org mismatch rejected');
     }
 
     // --- credential leakage: audit never stores secrets/envelopes ---

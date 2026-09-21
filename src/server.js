@@ -92,8 +92,12 @@ function errorStatus(e) {
   const errCode = e?.code || '';
   const map = {
     unauthorized: 401, forbidden: 403, bad_request: 400, bad_intent: 400,
-    rate_limited: 429, quota_exceeded: 429, org_locked: 403, token_expired: 403,
-    approval_expired: 403, intent_expired: 403, replay: 409, approval_resolved: 409,
+    sig_invalid: 401, unknown_kid: 401, key_revoked: 401, key_expired: 401,
+    passport_unknown: 404, passport_expired: 410, passport_revoked: 410,
+    token_unknown: 404, token_expired: 410, token_revoked: 410, token_mismatch: 400, token_malformed: 400,
+    scope_insufficient: 403, budget_exceeded: 403, depth_exceeded: 403, attenuation_violation: 403,
+    approval_required: 403, approval_expired: 403, approval_resolved: 409, intent_expired: 400, intent_mismatch: 400,
+    rate_limited: 429, quota_exceeded: 429, org_locked: 403, replay: 409,
     storage_error: 500,
   };
   let code = e?.status || map[errCode];
