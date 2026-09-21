@@ -723,6 +723,10 @@ class PostgresStore {
       }
       let current = 0;
       if (tokenId) {
+        await client.query(
+          'INSERT INTO token_spends (token_id, spent_cents) VALUES ($1, 0) ON CONFLICT (token_id) DO NOTHING',
+          [tokenId]
+        );
         const spendRes = await client.query(
           'SELECT spent_cents FROM token_spends WHERE token_id = $1 FOR UPDATE',
           [tokenId]
