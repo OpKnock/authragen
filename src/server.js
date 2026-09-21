@@ -34,8 +34,12 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 const BODY_LIMIT = parseByteSize(process.env.AUTHRA_BODY_LIMIT, 256 * 1024);
 const CORS_ORIGIN = process.env.AUTHRA_CORS || '';
 const TRUST_PROXY = process.env.AUTHRA_TRUST_PROXY === '1';
-const RISK_CEILING_DEFAULT = Number(process.env.AUTHRA_RISK_CEILING || 85);
-const RISK_STEPUP_DEFAULT = Number(process.env.AUTHRA_RISK_STEPUP || 30);
+function boundedIntEnv(name, fallback, min, max) {
+  const n = Number(process.env[name] ?? fallback);
+  return Number.isSafeInteger(n) && n >= min && n <= max ? n : fallback;
+}
+const RISK_CEILING_DEFAULT = boundedIntEnv('AUTHRA_RISK_CEILING', 85, 1, 100);
+const RISK_STEPUP_DEFAULT = boundedIntEnv('AUTHRA_RISK_STEPUP', 0 < 30 ? 30 : 30, 0, 99);
 const KMS_TYPE = (process.env.AUTHRA_KMS || 'file').toLowerCase();
 const STORE_TYPE = (process.env.AUTHRA_STORE || 'file').toLowerCase();
 const ALLOW_INSECURE_PROD_DEFAULTS = process.env.AUTHRA_ALLOW_INSECURE_PROD_DEFAULTS === '1';
@@ -149,7 +153,11 @@ const seen = new Map();
 function isSeen(pid, resource) { return seen.has(pid) && seen.get(pid).has(resource); }
 function markSeen(pid, resource) { if (!seen.has(pid)) seen.set(pid, new Set()); seen.get(pid).add(resource); }
 
-function callerKey(req) { return auth.lookupKey(auth.bearerOf(req)); }
+function callerKey(req) {
+  const bearer = auth.bearerOf(req);
+  if (bearer) rateLimit(req, 'auth', 300);
+  return auth.lookupKey(bearer);
+}
 function publicApproval(ap) {
   const out = { ...ap };
   delete out.action_token;
