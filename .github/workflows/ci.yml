@@ -5,14 +5,14 @@ permissions:
 
 on:
   push:
-    branches: [master, main, release/**]
+    branches: [master, main, production-hardening-v3, release/**]
   pull_request:
     branches: [master, main]
   release:
     types: [published]
 
 env:
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '22.x'
   PYTHON_VERSION: '3.12'
 
 jobs:
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: ['18', '20', '22']
+        node: ['22', '24']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
