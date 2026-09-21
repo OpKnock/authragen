@@ -36,8 +36,8 @@ agents with `adapters/mcp.js` / `a2a.js`) rather than replacing on day one.
    anchoring (`AUTHRA_ANCHOR_URL`). Tamper-evident (not “immutable”); portable across clouds.
 6. **Offline story.** Authenticity offline via org pubkey; freshness via polled
    revocation feed/checkpoints for air-gapped and on-prem agents.
-7. **Cost/scale.** Self-hosted, zero-dependency gateway; stateless envelope verify;
-   Postgres swap is one storage adapter.
+7. **Cost/scale.** Self-hosted gateway with explicit runtime dependencies; stateless envelope verification;
+   Postgres and Redis adapters are available for durable external state; authoritative reads remain mirror-backed.
 
 ## AuthraGen moves (what it actually implements)
 

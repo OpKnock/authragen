@@ -1,19 +1,19 @@
-# Known Limitations (v2.1)
+# Known Limitations (v2.2)
 
 ## Storage
 
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
 | File storage = single-instance | No horizontal scaling | Use Postgres adapter (documented) |
-| No built-in Postgres adapter | Production requires custom impl | Schema + transaction patterns documented |
-| No built-in Redis adapter | Distributed nonce/action-JTI not atomic | Redis `SET NX EX` pattern documented |
-| Process-local mutex for execute | Concurrent execute race in clustered | Postgres `SELECT FOR UPDATE` or Redis lock |
+
+
+| Authoritative mirror is instance-local | Multiple gateway instances can diverge in reads | Use one instance per authoritative state store; shared-state coordination is a separate deployment concern |
 
 ## KMS & Cryptography
 
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
-| No built-in KMS | File-backed org root = dev only | `AUTHRA_KMS` interface; bring AWS KMS/GCP KMS/Vault/Azure |
+
 | No HSM integration | FIPS 140-2 not certified | KMS backend can use CloudHSM |
 | Ed25519 only | Not quantum-resistant | Algorithm agility via `v` + `alg` header |
 | No key ceremony | Single admin can rotate root | Policy: require quorum for root rotation (future) |
@@ -41,7 +41,7 @@
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
 | Risk = heuristic | Not ML-based safety | Pluggable providers; ceiling only adds denials |
-| No dynamic policy update | Requires version bump | Fast versioning; simulation before deploy |
+| Policy changes are explicit versioned writes | Callers should simulate and review before activation | Version + hash is recorded in audit receipts |
 | No ABAC/XACML | Custom condition language | Conditions cover common cases; extensible |
 | Time windows = simple | No complex cron | Multiple windows; extensible |
 
@@ -66,29 +66,34 @@
 
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
-| No built-in UI auth | Dashboard = API key only | Proxy with OIDC (future) |
-| No multi-tenancy UI | Single org per dashboard | Run multiple instances |
+| No built-in UI SSO | Dashboard uses Bearer/API-key auth | Put the console behind an OIDC-aware reverse proxy |
+| Console is not an org-admin SaaS portal | Organization selection is API-key scoped | Use separate deployments or a trusted proxy for stronger administrative isolation |
 | No config API | Env vars only | ConfigMap/Secrets + reload (future) |
 | No metric for delegation depth | Blind spot | Custom metric (easy to add) |
 
 ## Roadmap (Not Committed)
 
-### v2.2 (Planned)
-- [ ] Postgres storage adapter
-- [ ] Redis storage adapter
-- [ ] AWS KMS / GCP KMS / Vault backends
-- [ ] OIDC federation (bind `did:authragen` to external IdP)
-- [ ] Webhook push for revocation
-- [ ] Dashboard OIDC auth
-- [ ] Metrics endpoint (`/metrics` Prometheus)
+### Next
+- [ ] OIDC federation with external identity providers
+- [ ] Push/webhook revocation distribution
+- [ ] Dashboard SSO/OIDC authentication
+- [ ] SPIFFE/SPIRE workload identity integration
+- [ ] JWT/W3C Verifiable Credential interoperability profiles
+- [ ] Log compression, archival and retention controls
+- [ ] Cross-instance authoritative-state coordination
+- [ ] Formal interoperability/conformance certification
 
-### v2.3 (Planned)
-- [ ] SPIFFE/SPIRE integration
-- [ ] Standard token format (JWT profile)
-- [ ] Native MCP/A2A server implementations
-- [ ] Policy visual editor in dashboard
-- [ ] Delegation templates
-- [ ] Log compression + archival
+### Research
+- [ ] Post-quantum signature profiles
+- [ ] Zero-knowledge policy proofs
+- [ ] Formal verification of the attenuation implementation
+
+### Completed in the current repository
+- [x] Postgres storage adapter
+- [x] Redis storage adapter
+- [x] AWS KMS / GCP KMS / Vault / Azure KMS interfaces
+- [x] Prometheus `/metrics` endpoint
+- [x] Dashboard policy editor, audit and lifecycle controls
 
 ### v3.0 (Research)
 - [ ] Post-quantum signatures (ML-DSA)
@@ -98,13 +103,13 @@
 
 ## Honest Assessment
 
-**AuthraGen is a prototype-grade control plane.** It implements the core cryptographic primitives and authorization logic correctly, but production deployment requires:
+**AuthraGen is an implementation-ready self-hosted control plane with explicit deployment boundaries.**
+The repository includes Postgres/Redis storage adapters, pluggable KMS backends, signed
+credentials, audit/checkpointing, a browser control plane and adversarial end-to-end tests.
+Production operation still requires sound key management, TLS, backups/DR, monitoring,
+incident response, external anchoring where required, and an architecture appropriate to
+shared-state/cluster requirements.
 
-1. **Operational maturity**: Postgres/Redis, KMS, monitoring, DR
-2. **Organizational process**: Key ceremonies, rotation schedules, incident response
-3. **Compliance validation**: SOC 2, ISO 27001, GDPR mapping (implemented; needs audit)
-4. **Scale testing**: Load tested to 10k req/s single-instance; distributed needs work
-
-**Use for production pilots with operational investment. Not a drop-in SaaS replacement.**
+Compliance certifications and formal conformance are not claimed by this repository.
 
 ## Next: [Deployment](/deployment/docker)

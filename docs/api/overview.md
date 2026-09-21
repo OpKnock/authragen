@@ -163,7 +163,7 @@ curl -H "Authorization: Bearer ak_abc123.secret" ...
 GET /health
 ```
 
-Response: `{ "status": "ok", "backend": "file", "timestamp": "..." }`
+Response includes `ok`, protocol/version, backend, persistence status, timestamp, custody policy, and the request ID.
 
 ## OpenAPI Spec
 
