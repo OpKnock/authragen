@@ -30,7 +30,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -q ruff mypy
@@ -87,7 +87,7 @@ jobs:
         python: ['3.10', '3.11', '3.12']
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - run: pip install -q pytest httpx cryptography -e sdk_python/
@@ -190,7 +190,7 @@ jobs:
       - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -q build twine cryptography -e sdk_python/
