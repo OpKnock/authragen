@@ -43,7 +43,7 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
-    "@aws-sdk/client-kms": "^3.400.0",
+    "@aws-sdk/client-kms": "^3.1156.0",
     "@azure/identity": "^4.0.0",
     "@azure/keyvault-keys": "^4.8.0",
     "@google-cloud/kms": "^6.1.0",
